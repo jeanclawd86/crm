@@ -1,27 +1,23 @@
-"use client";
-
-import { use } from "react";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getMeeting, getContact, getContactMeetings } from "@/lib/mock-data";
-import { stageColors, stageDotColors } from "@/lib/stage-colors";
+import { getMeeting, getContact, getContactMeetings } from "@/lib/db";
+import { stageDotColors } from "@/lib/stage-colors";
 
-export default function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
-  const meeting = getMeeting(id);
-  const contact = meeting ? getContact(meeting.contactId) : undefined;
-  const pastMeetings = contact ? getContactMeetings(contact.id).filter((m) => m.id !== id) : [];
+export const dynamic = "force-dynamic";
 
-  if (!meeting || !contact) {
-    return (
-      <div className="p-8">
-        <p className="text-muted-foreground">Meeting not found.</p>
-        <Link href="/" className="text-sm text-primary hover:underline mt-2 inline-block">Back to dashboard</Link>
-      </div>
-    );
-  }
+export default async function MeetingDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const meeting = await getMeeting(id);
+  if (!meeting) notFound();
+
+  const contact = await getContact(meeting.contactId);
+  if (!contact) notFound();
+
+  const allMeetings = await getContactMeetings(contact.id);
+  const pastMeetings = allMeetings.filter((m) => m.id !== id);
 
   const meetingDate = new Date(meeting.dateTime);
   const isPast = meetingDate < new Date();

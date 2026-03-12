@@ -5,14 +5,18 @@ import {
   getTodaysMeetings,
   getDueFollowUps,
   getPipelineCounts,
-} from "@/lib/mock-data";
+} from "@/lib/db";
 import { stageColors, stageDotColors } from "@/lib/stage-colors";
 import { PipelineStage } from "@/lib/types";
 
-export default function DashboardPage() {
-  const todaysMeetings = getTodaysMeetings();
-  const dueFollowUps = getDueFollowUps();
-  const pipelineCounts = getPipelineCounts();
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const [todaysMeetings, dueFollowUps, pipelineCounts] = await Promise.all([
+    getTodaysMeetings(),
+    getDueFollowUps(),
+    getPipelineCounts(),
+  ]);
 
   return (
     <div className="p-8 max-w-5xl">
