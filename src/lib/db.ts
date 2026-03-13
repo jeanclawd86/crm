@@ -3,6 +3,25 @@ import { Contact, Meeting, Activity, PipelineStage, ContactMode, Email, MeetingW
 
 // --- Row mappers ---
 
+// Safely convert any date-like value to YYYY-MM-DD string
+function toDateString(val: unknown): string | null {
+  if (!val) return null;
+  // If it's a Date object, use toISOString directly
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : val.toISOString().split("T")[0];
+  }
+  const s = String(val);
+  // Already YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // ISO string like 2026-03-16T04:00:00.000Z
+  const isoMatch = s.match(/^(\d{4}-\d{2}-\d{2})T/);
+  if (isoMatch) return isoMatch[1];
+  // Any other parseable date string
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toISOString().split("T")[0];
+  return null;
+}
+
 function rowToContact(row: Record<string, unknown>): Contact {
   return {
     id: row.id as string,
@@ -12,7 +31,7 @@ function rowToContact(row: Record<string, unknown>): Contact {
     role: row.role as string,
     stage: row.stage as PipelineStage,
     mode: (row.mode as ContactMode) || "prospect",
-    nextFollowUp: row.next_follow_up ? String(row.next_follow_up).split("T")[0] : null,
+    nextFollowUp: row.next_follow_up ? toDateString(row.next_follow_up) : null,
     source: row.source as string,
     notes: row.notes as string,
     avatarUrl: (row.avatar_url as string) || undefined,
