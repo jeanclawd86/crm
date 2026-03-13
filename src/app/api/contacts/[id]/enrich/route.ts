@@ -153,9 +153,11 @@ Based on ALL available data, return a JSON object with these fields. Be concise 
   "companyLocation": "Company HQ location",
   "companyFunding": "Funding info if available (e.g. '$95M Series B', 'Bootstrapped', 'Pre-seed')",
   "location": "Person's location if known",
-  "pilotOpportunities": "Based on what you know about their company: what potential opportunities exist for UserLabs (AI qualitative research tool)? How might they use AI-moderated user research? Who are their end users that they might want to research? 2-3 bullet points.",
-  "suggestedNextSteps": "3 actionable next steps for the upcoming meeting, formatted as bullet points with • prefix. Consider: what to research, what to ask about, how to position UserLabs for their specific needs."
+  "pilotOpportunities": "A single string with 2-3 bullet points separated by newlines. Each line starts with •. Based on what you know about their company: what potential opportunities exist for UserLabs (AI qualitative research tool)? How might they use AI-moderated user research? Who are their end users that they might want to research?",
+  "suggestedNextSteps": "A single string with 3 bullet points separated by newlines. Each line starts with •. Actionable next steps for the upcoming meeting. Consider: what to research, what to ask about, how to position UserLabs for their specific needs."
 }
+
+IMPORTANT: pilotOpportunities and suggestedNextSteps must be plain strings with newlines between bullets, NOT arrays or JSON sets. Example: "• First point\\n• Second point\\n• Third point"
 
 Return ONLY valid JSON, no markdown code fences.`;
 
@@ -171,19 +173,31 @@ Return ONLY valid JSON, no markdown code fences.`;
     const jsonStr = text.replace(/^```json?\n?/m, "").replace(/\n?```$/m, "").trim();
     const data = JSON.parse(jsonStr);
 
+    // Clean bullet-point fields — handle arrays, sets, or strings
+    const cleanBullets = (val: unknown): string | undefined => {
+      if (!val) return undefined;
+      if (Array.isArray(val)) return val.join("\n");
+      let s = String(val);
+      // Remove JSON set notation: {"• a","• b"} → • a\n• b
+      if (s.startsWith("{") && s.endsWith("}")) {
+        s = s.slice(1, -1).split(/","/).map(p => p.replace(/^"|"$/g, "")).join("\n");
+      }
+      return s;
+    };
+
     const result: EnrichmentResult = {};
-    if (data.personSummary) result.personSummary = data.personSummary;
-    if (data.company && data.company !== "Unknown") result.company = data.company;
-    if (data.role && data.role !== "Unknown") result.role = data.role;
-    if (data.companyDescription) result.companyDescription = data.companyDescription;
-    if (data.companySize) result.companySize = data.companySize;
-    if (data.companyIndustry) result.companyIndustry = data.companyIndustry;
-    if (data.companyType) result.companyType = data.companyType;
-    if (data.companyLocation) result.companyLocation = data.companyLocation;
-    if (data.companyFunding) result.companyFunding = data.companyFunding;
-    if (data.location) result.location = data.location;
-    if (data.pilotOpportunities) result.pilotOpportunities = data.pilotOpportunities;
-    if (data.suggestedNextSteps) result.suggestedNextSteps = data.suggestedNextSteps;
+    if (data.personSummary) result.personSummary = String(data.personSummary);
+    if (data.company && data.company !== "Unknown") result.company = String(data.company);
+    if (data.role && data.role !== "Unknown") result.role = String(data.role);
+    if (data.companyDescription) result.companyDescription = String(data.companyDescription);
+    if (data.companySize) result.companySize = String(data.companySize);
+    if (data.companyIndustry) result.companyIndustry = String(data.companyIndustry);
+    if (data.companyType) result.companyType = String(data.companyType);
+    if (data.companyLocation) result.companyLocation = String(data.companyLocation);
+    if (data.companyFunding) result.companyFunding = String(data.companyFunding);
+    if (data.location) result.location = String(data.location);
+    if (data.pilotOpportunities) result.pilotOpportunities = cleanBullets(data.pilotOpportunities);
+    if (data.suggestedNextSteps) result.suggestedNextSteps = cleanBullets(data.suggestedNextSteps);
 
     return result;
   } catch (error) {
