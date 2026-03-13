@@ -636,8 +636,8 @@ export function ContactDetail({
                 </div>
                 <div className="flex-1 min-w-0">
                   <h1 className="text-lg font-semibold"><InlineEdit value={localContact.name} onSave={(v) => patchField("name", v)} className="text-lg font-semibold" /></h1>
-                  <InlineEdit value={localContact.role} onSave={(v) => patchField("role", v)} className="text-sm text-muted-foreground" placeholder="Add role" />
-                  <InlineEdit value={localContact.company} onSave={(v) => patchField("company", v)} className="text-sm text-muted-foreground" placeholder="Add company" />
+                  <div><InlineEdit value={localContact.role} onSave={(v) => patchField("role", v)} className="text-sm text-muted-foreground" placeholder="Add role" /></div>
+                  <div><InlineEdit value={localContact.company} onSave={(v) => patchField("company", v)} className="text-sm text-muted-foreground" placeholder="Add company" /></div>
                   <div className="mt-1"><InlineEdit value={localContact.email} onSave={(v) => patchField("email", v)} className="text-xs text-muted-foreground" placeholder="Add email" /></div>
                 </div>
               </div>
