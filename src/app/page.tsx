@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  getTodaysMeetings,
+  getUpcomingMeetings,
+  getRecentMeetings,
   getDueFollowUps,
   getPipelineCounts,
 } from "@/lib/db";
@@ -20,8 +21,9 @@ export default async function DashboardPage({
   const mode = (modeParam === "investor" ? "investor" : "prospect") as ContactMode;
   const stages = getStagesForMode(mode);
 
-  const [todaysMeetings, dueFollowUps, pipelineCounts] = await Promise.all([
-    getTodaysMeetings(mode),
+  const [upcomingMeetings, recentMeetings, dueFollowUps, pipelineCounts] = await Promise.all([
+    getUpcomingMeetings(mode),
+    getRecentMeetings(mode),
     getDueFollowUps(mode),
     getPipelineCounts(mode),
   ]);
@@ -71,21 +73,21 @@ export default async function DashboardPage({
       )}
 
       <div className="grid grid-cols-2 gap-6">
-        {/* Today's Meetings */}
+        {/* Upcoming Meetings */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-medium">
-              Today&apos;s Meetings
+              Upcoming Meetings
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {todaysMeetings.length === 0 ? (
+            {upcomingMeetings.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">
-                No meetings today
+                No upcoming meetings
               </p>
             ) : (
               <div className="space-y-2">
-                {todaysMeetings.map((meeting) => (
+                {upcomingMeetings.map((meeting) => (
                   <Link
                     key={meeting.id}
                     href={`/contacts/${meeting.contactId}?prep=${meeting.id}&mode=${mode}`}
@@ -98,13 +100,17 @@ export default async function DashboardPage({
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-muted-foreground">
+                            {new Date(meeting.dateTime).toLocaleDateString(
+                              "en-US",
+                              { month: "short", day: "numeric" }
+                            )}
+                            {" · "}
                             {new Date(meeting.dateTime).toLocaleTimeString(
                               "en-US",
                               { hour: "numeric", minute: "2-digit" }
                             )}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            — {meeting.duration}min
+                            {" · "}
+                            {meeting.duration}min
                           </span>
                         </div>
                       </div>
@@ -180,6 +186,28 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Recent Meetings */}
+      {recentMeetings.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm font-medium text-muted-foreground mb-3">Recent Meetings</h2>
+          <div className="space-y-1">
+            {recentMeetings.map((meeting) => (
+              <Link
+                key={meeting.id}
+                href={`/contacts/${meeting.contactId}?prep=${meeting.id}&mode=${mode}`}
+                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors"
+              >
+                <span className="text-xs text-muted-foreground w-16 shrink-0">
+                  {new Date(meeting.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </span>
+                <span className="text-sm text-muted-foreground truncate">{meeting.title}</span>
+                <span className="text-xs text-muted-foreground/60 shrink-0 ml-auto">{meeting.contact.name}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="mt-6">
         <Link

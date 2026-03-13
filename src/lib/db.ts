@@ -158,6 +158,94 @@ export async function getTodaysMeetings(mode?: ContactMode): Promise<(Meeting & 
   }));
 }
 
+export async function getUpcomingMeetings(mode?: ContactMode, limit = 10): Promise<(Meeting & { contact: Contact })[]> {
+  const query = mode
+    ? sql`
+      SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+             c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+             c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+             c.created_at AS c_created_at
+      FROM meetings m
+      JOIN contacts c ON c.id = m.contact_id
+      WHERE DATE(m.date_time) >= CURRENT_DATE AND c.mode = ${mode}
+      ORDER BY m.date_time ASC
+      LIMIT ${limit}
+    `
+    : sql`
+      SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+             c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+             c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+             c.created_at AS c_created_at
+      FROM meetings m
+      JOIN contacts c ON c.id = m.contact_id
+      WHERE DATE(m.date_time) >= CURRENT_DATE
+      ORDER BY m.date_time ASC
+      LIMIT ${limit}
+    `;
+  const { rows } = await query;
+  return rows.map((row) => ({
+    ...rowToMeeting(row),
+    contact: rowToContact({
+      id: row.contact_id,
+      name: row.c_name,
+      email: row.c_email,
+      company: row.c_company,
+      role: row.c_role,
+      stage: row.c_stage,
+      mode: row.c_mode,
+      next_follow_up: row.c_next_follow_up,
+      source: row.c_source,
+      notes: row.c_notes,
+      avatar_url: row.c_avatar_url,
+      created_at: row.c_created_at,
+    }),
+  }));
+}
+
+export async function getRecentMeetings(mode?: ContactMode, limit = 5): Promise<(Meeting & { contact: Contact })[]> {
+  const query = mode
+    ? sql`
+      SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+             c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+             c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+             c.created_at AS c_created_at
+      FROM meetings m
+      JOIN contacts c ON c.id = m.contact_id
+      WHERE DATE(m.date_time) < CURRENT_DATE AND c.mode = ${mode}
+      ORDER BY m.date_time DESC
+      LIMIT ${limit}
+    `
+    : sql`
+      SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+             c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+             c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+             c.created_at AS c_created_at
+      FROM meetings m
+      JOIN contacts c ON c.id = m.contact_id
+      WHERE DATE(m.date_time) < CURRENT_DATE
+      ORDER BY m.date_time DESC
+      LIMIT ${limit}
+    `;
+  const { rows } = await query;
+  return rows.map((row) => ({
+    ...rowToMeeting(row),
+    contact: rowToContact({
+      id: row.contact_id,
+      name: row.c_name,
+      email: row.c_email,
+      company: row.c_company,
+      role: row.c_role,
+      stage: row.c_stage,
+      mode: row.c_mode,
+      next_follow_up: row.c_next_follow_up,
+      source: row.c_source,
+      notes: row.c_notes,
+      avatar_url: row.c_avatar_url,
+      created_at: row.c_created_at,
+    }),
+  }));
+}
+
 export async function getDueFollowUps(mode?: ContactMode): Promise<Contact[]> {
   if (mode) {
     const { rows } = await sql`

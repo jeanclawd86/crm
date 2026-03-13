@@ -302,21 +302,6 @@ export function ContactsTable({
               <option value="archived">Archived</option>
               <option value="all">Show All</option>
             </select>
-            <div className="flex gap-1 ml-auto flex-wrap">
-              {stages.map((stage) => (
-                <button
-                  key={stage}
-                  onClick={() => changeStageFilter(stage)}
-                  className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                    stageFilter === stage
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent"
-                  }`}
-                >
-                  {stage}
-                </button>
-              ))}
-            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
