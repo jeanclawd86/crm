@@ -282,6 +282,50 @@ export function ContactDetail({
       <div className="grid grid-cols-3 gap-6">
         {/* Left column (2/3 width) */}
         <div className="col-span-2 space-y-6">
+          {/* Account Intelligence */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Account Intelligence</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!localContact.accountStatus && !localContact.keyProblems && !localContact.pilotOpportunities && !localContact.meetingInsights ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No data yet — run transcript analysis to populate</p>
+              ) : null}
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Account Status</p>
+                  <div className="flex items-center gap-2">
+                    <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                      localContact.accountStatus && /active|pilot/i.test(localContact.accountStatus)
+                        ? "bg-green-500"
+                        : localContact.accountStatus && /follow.?up|needs/i.test(localContact.accountStatus)
+                        ? "bg-yellow-500"
+                        : "bg-gray-500"
+                    }`} />
+                    <InlineEdit value={localContact.accountStatus || ""} onSave={(v) => patchField("accountStatus", v)} className="text-sm" placeholder="e.g. Active prospect - demo scheduled" />
+                  </div>
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Key Problems & Objectives</p>
+                  <InlineEdit value={localContact.keyProblems || ""} onSave={(v) => patchField("keyProblems", v)} className="text-sm" placeholder="Key problems/objectives discussed" multiline />
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Pilot Opportunities</p>
+                  <InlineEdit value={localContact.pilotOpportunities || ""} onSave={(v) => patchField("pilotOpportunities", v)} className="text-sm" placeholder="Potential pilot opportunities identified" multiline />
+                </div>
+                <Separator />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Meeting Insights</p>
+                  <div className="max-h-48 overflow-y-auto">
+                    <InlineEdit value={localContact.meetingInsights || ""} onSave={(v) => patchField("meetingInsights", v)} className="text-sm" placeholder="Cumulative insights from meetings" multiline />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Meeting History */}
           <Card>
             <CardHeader className="pb-3">

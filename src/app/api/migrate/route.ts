@@ -43,6 +43,12 @@ export async function POST() {
     // Archive support
     await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE`;
 
+    // Account intelligence fields (from transcript mining)
+    await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS account_status TEXT`;
+    await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS key_problems TEXT`;
+    await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pilot_opportunities TEXT`;
+    await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS meeting_insights TEXT`;
+
     return NextResponse.json({ success: true, message: "Migration complete: all enrichment, transcript, email, and archive columns added" });
   } catch (error) {
     console.error("Migration error:", error);

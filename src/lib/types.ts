@@ -54,6 +54,11 @@ export interface Contact {
   companyType?: string;
   companyLocation?: string;
   companyFunding?: string;
+  // Account intelligence fields (from transcript mining)
+  accountStatus?: string;
+  keyProblems?: string;
+  pilotOpportunities?: string;
+  meetingInsights?: string;
 }
 
 export interface Meeting {

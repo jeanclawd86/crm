@@ -27,6 +27,10 @@ function rowToContact(row: Record<string, unknown>): Contact {
     companyType: (row.company_type as string) || undefined,
     companyLocation: (row.company_location as string) || undefined,
     companyFunding: (row.company_funding as string) || undefined,
+    accountStatus: (row.account_status as string) || undefined,
+    keyProblems: (row.key_problems as string) || undefined,
+    pilotOpportunities: (row.pilot_opportunities as string) || undefined,
+    meetingInsights: (row.meeting_insights as string) || undefined,
   };
 }
 
@@ -206,7 +210,7 @@ export async function createContact(data: Omit<Contact, "id" | "createdAt">): Pr
   return rowToContact(rows[0]);
 }
 
-type ContactUpdateFields = Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes" | "archived" | "linkedinUrl" | "location" | "personSummary" | "companyDescription" | "companySize" | "companyIndustry" | "companyType" | "companyLocation" | "companyFunding">>;
+type ContactUpdateFields = Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes" | "archived" | "linkedinUrl" | "location" | "personSummary" | "companyDescription" | "companySize" | "companyIndustry" | "companyType" | "companyLocation" | "companyFunding" | "accountStatus" | "keyProblems" | "pilotOpportunities" | "meetingInsights">>;
 
 export async function updateContact(id: string, data: ContactUpdateFields): Promise<Contact | undefined> {
   const current = await getContact(id);
@@ -229,13 +233,19 @@ export async function updateContact(id: string, data: ContactUpdateFields): Prom
   const companyType = data.companyType !== undefined ? data.companyType : (current.companyType ?? null);
   const companyLocation = data.companyLocation !== undefined ? data.companyLocation : (current.companyLocation ?? null);
   const companyFunding = data.companyFunding !== undefined ? data.companyFunding : (current.companyFunding ?? null);
+  const accountStatus = data.accountStatus !== undefined ? data.accountStatus : (current.accountStatus ?? null);
+  const keyProblems = data.keyProblems !== undefined ? data.keyProblems : (current.keyProblems ?? null);
+  const pilotOpportunities = data.pilotOpportunities !== undefined ? data.pilotOpportunities : (current.pilotOpportunities ?? null);
+  const meetingInsights = data.meetingInsights !== undefined ? data.meetingInsights : (current.meetingInsights ?? null);
   const { rows } = await sql`
     UPDATE contacts
     SET name = ${name}, email = ${email}, company = ${company}, role = ${role},
         stage = ${stage}, next_follow_up = ${nextFollowUp}, source = ${source}, notes = ${notes}, archived = ${archived},
         linkedin_url = ${linkedinUrl}, location = ${location}, person_summary = ${personSummary},
         company_description = ${companyDescription}, company_size = ${companySize}, company_industry = ${companyIndustry},
-        company_type = ${companyType}, company_location = ${companyLocation}, company_funding = ${companyFunding}
+        company_type = ${companyType}, company_location = ${companyLocation}, company_funding = ${companyFunding},
+        account_status = ${accountStatus}, key_problems = ${keyProblems},
+        pilot_opportunities = ${pilotOpportunities}, meeting_insights = ${meetingInsights}
     WHERE id = ${id}
     RETURNING *
   `;
