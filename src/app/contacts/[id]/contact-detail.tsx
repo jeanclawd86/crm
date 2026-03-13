@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { InlineEdit } from "@/components/ui/inline-edit";
 import { stageColors, stageDotColors } from "@/lib/stage-colors";
 import { PipelineStage, Activity, Contact, Meeting, Email, getStagesForMode } from "@/lib/types";
 
@@ -75,6 +76,22 @@ export function ContactDetail({
   const [enriching, setEnriching] = useState(false);
   const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
   const [emails] = useState(initialEmails);
+  const [localContact, setLocalContact] = useState(contact);
+
+  const patchField = useCallback(async (field: string, value: string) => {
+    const prev = localContact;
+    setLocalContact((c) => ({ ...c, [field]: value }));
+    const res = await fetch(`/api/contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+    if (!res.ok) {
+      setLocalContact(prev);
+      throw new Error("Failed to save");
+    }
+    router.refresh();
+  }, [localContact, contact.id, router]);
 
   async function handleFollowUpChange(newDate: string) {
     setFollowUp(newDate);
@@ -533,10 +550,10 @@ export function ContactDetail({
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h1 className="text-lg font-semibold truncate">{contact.name}</h1>
-                  <p className="text-sm text-muted-foreground truncate">{contact.role}</p>
-                  <p className="text-sm text-muted-foreground truncate">{contact.company}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{contact.email}</p>
+                  <h1 className="text-lg font-semibold"><InlineEdit value={localContact.name} onSave={(v) => patchField("name", v)} className="text-lg font-semibold" /></h1>
+                  <InlineEdit value={localContact.role} onSave={(v) => patchField("role", v)} className="text-sm text-muted-foreground" placeholder="Add role" />
+                  <InlineEdit value={localContact.company} onSave={(v) => patchField("company", v)} className="text-sm text-muted-foreground" placeholder="Add company" />
+                  <div className="mt-1"><InlineEdit value={localContact.email} onSave={(v) => patchField("email", v)} className="text-xs text-muted-foreground" placeholder="Add email" /></div>
                 </div>
               </div>
               <div className="flex gap-2 mt-3">
@@ -628,69 +645,34 @@ export function ContactDetail({
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-xs text-muted-foreground">Company</p>
-                <p className="text-sm">{contact.company}</p>
+                <p className="text-xs text-muted-foreground">Description</p>
+                <InlineEdit value={localContact.companyDescription || ""} onSave={(v) => patchField("companyDescription", v)} className="text-sm" placeholder="Add description" multiline />
               </div>
-              {contact.companyIndustry && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Industry</p>
-                    <p className="text-sm">{contact.companyIndustry}</p>
-                  </div>
-                </>
-              )}
-              {contact.companySize && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Size</p>
-                    <p className="text-sm">{contact.companySize}</p>
-                  </div>
-                </>
-              )}
-              {contact.companyType && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Type</p>
-                    <p className="text-sm">{contact.companyType}</p>
-                  </div>
-                </>
-              )}
-              {contact.companyDescription && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Description</p>
-                    <p className="text-sm">{contact.companyDescription}</p>
-                  </div>
-                </>
-              )}
-              {contact.companyLocation && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Location</p>
-                    <p className="text-sm">{contact.companyLocation}</p>
-                  </div>
-                </>
-              )}
-              {contact.companyFunding && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Funding</p>
-                    <p className="text-sm">{contact.companyFunding}</p>
-                  </div>
-                </>
-              )}
-              {!contact.companyIndustry && !contact.companySize && !contact.companyType && !contact.companyDescription && !contact.companyLocation && !contact.companyFunding && (
-                <>
-                  <Separator />
-                  <p className="text-xs text-muted-foreground italic">No enrichment data yet</p>
-                </>
-              )}
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground">Industry</p>
+                <InlineEdit value={localContact.companyIndustry || ""} onSave={(v) => patchField("companyIndustry", v)} className="text-sm" placeholder="Add industry" />
+              </div>
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground">Size</p>
+                <InlineEdit value={localContact.companySize || ""} onSave={(v) => patchField("companySize", v)} className="text-sm" placeholder="Add size" />
+              </div>
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground">Type</p>
+                <InlineEdit value={localContact.companyType || ""} onSave={(v) => patchField("companyType", v)} className="text-sm" placeholder="Add type" />
+              </div>
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground">Location</p>
+                <InlineEdit value={localContact.companyLocation || ""} onSave={(v) => patchField("companyLocation", v)} className="text-sm" placeholder="Add location" />
+              </div>
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground">Funding</p>
+                <InlineEdit value={localContact.companyFunding || ""} onSave={(v) => patchField("companyFunding", v)} className="text-sm" placeholder="Add funding" />
+              </div>
             </CardContent>
           </Card>
 
@@ -701,49 +683,19 @@ export function ContactDetail({
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-xs text-muted-foreground">Title</p>
-                <p className="text-sm">{contact.role} at {contact.company}</p>
+                <p className="text-xs text-muted-foreground">Background</p>
+                <InlineEdit value={localContact.personSummary || ""} onSave={(v) => patchField("personSummary", v)} className="text-sm" placeholder="Add background" multiline />
               </div>
-              {contact.personSummary && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Background</p>
-                    <p className="text-sm whitespace-pre-wrap">{contact.personSummary}</p>
-                  </div>
-                </>
-              )}
-              {contact.location && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Location</p>
-                    <p className="text-sm">{contact.location}</p>
-                  </div>
-                </>
-              )}
-              {contact.linkedinUrl && (
-                <>
-                  <Separator />
-                  <div>
-                    <p className="text-xs text-muted-foreground">LinkedIn</p>
-                    <a
-                      href={contact.linkedinUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-400 hover:underline truncate block"
-                    >
-                      {contact.linkedinUrl}
-                    </a>
-                  </div>
-                </>
-              )}
-              {!contact.personSummary && !contact.location && !contact.linkedinUrl && (
-                <>
-                  <Separator />
-                  <p className="text-xs text-muted-foreground italic">No enrichment data yet</p>
-                </>
-              )}
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground">Location</p>
+                <InlineEdit value={localContact.location || ""} onSave={(v) => patchField("location", v)} className="text-sm" placeholder="Add location" />
+              </div>
+              <Separator />
+              <div>
+                <p className="text-xs text-muted-foreground">LinkedIn</p>
+                <InlineEdit value={localContact.linkedinUrl || ""} onSave={(v) => patchField("linkedinUrl", v)} className="text-sm text-blue-400" placeholder="Add LinkedIn URL" />
+              </div>
             </CardContent>
           </Card>
 
@@ -755,7 +707,7 @@ export function ContactDetail({
             <CardContent className="space-y-3">
               <div>
                 <p className="text-xs text-muted-foreground">Source</p>
-                <p className="text-sm">{contact.source}</p>
+                <InlineEdit value={localContact.source} onSave={(v) => patchField("source", v)} className="text-sm" placeholder="Add source" />
               </div>
               <Separator />
               <div>
@@ -767,7 +719,7 @@ export function ContactDetail({
               <Separator />
               <div>
                 <p className="text-xs text-muted-foreground">Email</p>
-                <p className="text-sm">{contact.email}</p>
+                <p className="text-sm">{localContact.email}</p>
               </div>
             </CardContent>
           </Card>
