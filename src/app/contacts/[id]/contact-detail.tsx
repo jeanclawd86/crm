@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback } from "react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -85,44 +85,23 @@ export function ContactDetail({
   const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
   const [emails] = useState(initialEmails);
   const [localContact, setLocalContact] = useState(contact);
-  const pendingPatches = useRef<Record<string, string>>({});
-
-  // Sync with server props but preserve any in-flight edits
-  useEffect(() => {
-    setLocalContact((prev) => {
-      const merged = { ...contact };
-      // Keep pending patches over server data
-      for (const [field, value] of Object.entries(pendingPatches.current)) {
-        (merged as Record<string, unknown>)[field] = value;
-      }
-      return merged;
-    });
-  }, [contact]);
   const [meetings, setMeetings] = useState(contactMeetings);
   const [hideIrrelevantMeetings, setHideIrrelevantMeetings] = useState(true);
 
   const patchField = useCallback(async (field: string, value: string) => {
-    pendingPatches.current[field] = value;
     setLocalContact((c) => ({ ...c, [field]: value }));
-    try {
-      const res = await fetch(`/api/contacts/${contact.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [field]: value }),
-      });
-      if (!res.ok) {
-        delete pendingPatches.current[field];
-        // Revert by re-fetching
-        router.refresh();
-        throw new Error("Failed to save");
-      }
-      // Small delay so server has the updated data before refresh
-      await new Promise((r) => setTimeout(r, 100));
-      router.refresh();
-    } finally {
-      delete pendingPatches.current[field];
+    const res = await fetch(`/api/contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+    if (!res.ok) {
+      // Revert on failure — re-fetch from server
+      const fresh = await fetch(`/api/contacts/${contact.id}`).then(r => r.json());
+      setLocalContact(fresh);
+      throw new Error("Failed to save");
     }
-  }, [contact.id, router]);
+  }, [contact.id]);
 
   async function handleFollowUpChange(newDate: string) {
     setFollowUp(newDate);
