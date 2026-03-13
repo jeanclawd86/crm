@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContact, updateContact, getContactMeetings } from "@/lib/db";
 import { checkAuth } from "@/lib/auth";
-import { PipelineStage } from "@/lib/types";
+import Anthropic from "@anthropic-ai/sdk";
 
 interface BraveWebResult {
   title: string;
@@ -10,238 +10,189 @@ interface BraveWebResult {
 }
 
 interface BraveSearchResponse {
-  web?: {
-    results: BraveWebResult[];
-  };
+  web?: { results: BraveWebResult[] };
 }
 
-/** Strip HTML tags, decode entities, remove LinkedIn/scraper boilerplate, and trim truncated fragments */
-function cleanText(raw: string): string {
-  let text = raw
-    // Decode common HTML entities
-    .replace(/&#x27;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#\d+;/g, "")
-    // Strip HTML tags
-    .replace(/<[^>]+>/g, "")
-    // Remove LinkedIn boilerplate (aggressive)
-    .replace(/\d+\+?\s*(billion|million)\s*members?\s*\|[^.]+\./gi, "")
-    .replace(/Manage your professional identity[^.]*\./gi, "")
-    .replace(/Build and engage with your professional network[^.]*\./gi, "")
-    .replace(/Access knowledge,?\s*insights\s*and\s*opportunities\.?/gi, "")
-    .replace(/View\s+\w+[^']*?'s\s*(email|profile)[^.]*\./gi, "")
-    .replace(/\w+\s*contact details:[^.]*\./gi, "")
-    .replace(/Email\s*address:\s*\S+/gi, "")
-    .replace(/Phone\s*number:\s*\S+/gi, "")
-    .replace(/\+1-[\d*-]+/g, "")
-    .replace(/[\w*]+@[\w*.]+/g, "") // redacted emails
-    .replace(/\*{2,}[\d-]*/g, "") // redacted phone numbers like ***-****
-    .replace(/com\s*&\s*phone:/gi, "") // LinkedIn scraping fragment
-    .replace(/'s\s*profile\s*as\b/gi, "") // LinkedIn profile fragment
-    .replace(/located in \w{3,15}$/i, "") // truncated location at end
-    // Collapse whitespace
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  // Remove leading pipes/separators
-  text = text.replace(/^\s*\|\s*/, "").trim();
-  // Trim to last complete sentence (remove trailing truncated fragments)
-  const sentences = text.match(/[^.!?]+[.!?]/g);
-  if (sentences && sentences.length > 0) {
-    const complete = sentences.join("").trim();
-    if (complete.length > 20) {
-      text = complete;
-    }
+interface EnrichmentResult {
+  personSummary?: string;
+  company?: string;
+  role?: string;
+  companyDescription?: string;
+  companySize?: string;
+  companyIndustry?: string;
+  companyType?: string;
+  companyLocation?: string;
+  companyFunding?: string;
+  linkedinUrl?: string;
+  location?: string;
+  accountStatus?: string;
+  keyProblems?: string;
+  pilotOpportunities?: string;
+  suggestedNextSteps?: string;
+}
+
+// ─── Brave Search helper ───
+async function braveSearch(query: string, apiKey: string, count = 5): Promise<BraveWebResult[]> {
+  try {
+    const res = await fetch(
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`,
+      { headers: { "X-Subscription-Token": apiKey, Accept: "application/json" } }
+    );
+    const data: BraveSearchResponse = await res.json();
+    return data.web?.results || [];
+  } catch {
+    return [];
   }
-  // If result is too short or garbage, return empty
-  if (text.length < 15) return "";
-  return text;
 }
 
+// ─── Website scraper ───
+async function scrapeWebsite(url: string): Promise<string> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; CRM-Enrichment/1.0)" },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return "";
+    const html = await res.text();
+    // Strip scripts, styles, and HTML tags — extract text content
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&#\d+;/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    // Limit to first 3000 chars (enough for homepage content)
+    return text.slice(0, 3000);
+  } catch {
+    return "";
+  }
+}
+
+// ─── Extract LinkedIn URL from search results ───
 function extractLinkedIn(results: BraveWebResult[]): string | undefined {
-  const linkedIn = results.find(
-    (r) => r.url.includes("linkedin.com/in/") || r.url.includes("linkedin.com/company/")
+  const linkedin = results.find((r) =>
+    r.url.match(/linkedin\.com\/in\//)
   );
-  return linkedIn?.url;
+  return linkedin?.url;
 }
 
-function extractFromResults(results: BraveWebResult[], keywords: string[]): string | undefined {
-  for (const result of results) {
-    const text = `${result.title} ${result.description}`.toLowerCase();
-    if (keywords.some((kw) => text.includes(kw.toLowerCase()))) {
-      return result.description.slice(0, 500);
-    }
+// ─── Find company website URL from search results ───
+function findCompanyUrl(results: BraveWebResult[], companyName: string): string | undefined {
+  if (!companyName || companyName === "Unknown") return undefined;
+  const lower = companyName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  // Look for a result URL that matches the company name
+  for (const r of results) {
+    try {
+      const host = new URL(r.url).hostname.replace("www.", "").toLowerCase();
+      const hostClean = host.replace(/[^a-z0-9]/g, "");
+      if (hostClean.includes(lower) || lower.includes(hostClean.split(".")[0])) {
+        return `https://${new URL(r.url).hostname}`;
+      }
+    } catch { /* skip */ }
   }
   return undefined;
 }
 
-function inferCompanySize(text: string): string | undefined {
-  const lower = text.toLowerCase();
-  if (/\b(\d{1,3}),?(\d{3})\+?\s*(employees|people|team)/i.test(text)) {
-    const match = text.match(/(\d{1,3}),?(\d{3})\+?\s*(employees|people|team)/i);
-    if (match) return `${match[1]}${match[2]}+ employees`;
-  }
-  if (lower.includes("enterprise") || lower.includes("fortune 500")) return "Enterprise (1000+)";
-  if (lower.includes("mid-market") || lower.includes("mid-size")) return "Mid-market (100-1000)";
-  if (lower.includes("startup") || lower.includes("early-stage")) return "Startup (<50)";
-  if (lower.includes("small business") || lower.includes("smb")) return "Small business (10-100)";
-  return undefined;
-}
-
-function inferIndustry(text: string): string | undefined {
-  const industries: Record<string, string[]> = {
-    "Software / SaaS": ["saas", "software", "cloud platform", "developer tools"],
-    "Fintech": ["fintech", "financial technology", "payments", "banking software"],
-    "Healthcare": ["healthcare", "healthtech", "medical", "biotech"],
-    "E-commerce": ["e-commerce", "ecommerce", "online retail", "marketplace"],
-    "AI / Machine Learning": ["artificial intelligence", "machine learning", "ai company", "deep learning"],
-    "Cybersecurity": ["cybersecurity", "security", "infosec"],
-    "Education": ["edtech", "education technology", "learning platform"],
-    "Real Estate": ["proptech", "real estate", "property"],
-    "Marketing / AdTech": ["martech", "adtech", "marketing technology", "advertising"],
-    "Logistics / Supply Chain": ["logistics", "supply chain", "shipping"],
-  };
-  const lower = text.toLowerCase();
-  for (const [industry, keywords] of Object.entries(industries)) {
-    if (keywords.some((kw) => lower.includes(kw))) return industry;
-  }
-  return undefined;
-}
-
-function inferCompanyType(text: string): string | undefined {
-  const lower = text.toLowerCase();
-  if (lower.includes("b2b") || lower.includes("enterprise sales") || lower.includes("business customers")) return "B2B";
-  if (lower.includes("b2c") || lower.includes("consumer") || lower.includes("retail customers")) return "B2C";
-  if (lower.includes("b2b2c")) return "B2B2C";
-  return undefined;
-}
-
-function extractFunding(text: string): string | undefined {
-  const fundingMatch = text.match(/(?:raised|funding|series\s*[a-f]|seed|round)[^.]*?\$[\d.]+\s*[bmk](?:illion)?/i);
-  if (fundingMatch) return fundingMatch[0].trim();
-  const dollarMatch = text.match(/\$[\d.]+\s*(?:billion|million|[bmk])\s*(?:in\s+)?(?:funding|raised|valuation|round)/i);
-  if (dollarMatch) return dollarMatch[0].trim();
-  return undefined;
-}
-
-function extractLocation(text: string): string | undefined {
-  const locationMatch = text.match(/(?:based in|headquartered in|located in|hq:?\s*)\s*([A-Z][a-zA-Z\s,]+)/i);
-  if (locationMatch) return locationMatch[1].trim().slice(0, 100);
-  return undefined;
-}
-
-function generateNextSteps(
-  stage: PipelineStage,
-  mode: string,
+// ─── AI Synthesis via Claude ───
+async function synthesizeWithAI(
+  contactName: string,
+  contactCompany: string,
+  contactRole: string,
+  searchResults: BraveWebResult[],
+  websiteContent: string,
   meetingCount: number,
-  contact: { name: string; company: string; nextFollowUp?: string | null; companyIndustry?: string | null }
-): string {
-  const firstName = contact.name.split(" ")[0];
-  const steps: string[] = [];
-
-  if (mode === "investor") {
-    switch (stage) {
-      case "Researching":
-        steps.push(`Research ${contact.company} investment thesis and recent portfolio`);
-        steps.push("Find warm intro path via LinkedIn connections");
-        steps.push("Prepare 1-paragraph cold email draft");
-        break;
-      case "Warm Intro":
-        steps.push(`Follow up with ${firstName} if no response in 3-5 days`);
-        steps.push("Share deck or one-pager if requested");
-        steps.push("Research their recent investments for talking points");
-        break;
-      case "Met":
-        steps.push(`Send follow-up email to ${firstName} with deck/materials`);
-        steps.push(`Research ${contact.company}'s portfolio for overlap/synergy`);
-        steps.push("Prepare answers for likely due diligence questions");
-        break;
-      case "Pitched":
-        steps.push("Send follow-up materials from pitch");
-        steps.push("Address any open questions from the meeting");
-        steps.push("Schedule follow-up call within 1 week");
-        break;
-      case "Due Diligence":
-        steps.push("Prepare data room access if not already shared");
-        steps.push("Schedule follow-up call to address DD questions");
-        steps.push("Line up customer references if requested");
-        break;
-      case "Term Sheet":
-        steps.push("Review terms with legal counsel");
-        steps.push("Negotiate key terms (valuation, board seats, pro-rata)");
-        steps.push("Begin closing checklist");
-        break;
-      case "Committed":
-        steps.push("Finalize legal docs and wire instructions");
-        steps.push("Add to investor update distribution list");
-        steps.push("Send welcome package and onboarding info");
-        break;
-      default:
-        steps.push(`Follow up with ${firstName}`);
-        steps.push("Update stage based on latest interaction");
-    }
-  } else {
-    // prospect mode
-    switch (stage) {
-      case "Lead":
-        steps.push(`Research ${contact.company} and their ${contact.companyIndustry || "industry"} challenges`);
-        steps.push(`Send intro email to ${firstName} with relevant use case`);
-        steps.push("Identify decision-maker if not already confirmed");
-        break;
-      case "Intro":
-        steps.push(meetingCount === 0
-          ? `Schedule intro call with ${firstName}`
-          : `Send follow-up from last conversation with ${firstName}`);
-        steps.push("Share relevant case study or demo link");
-        steps.push("Qualify: confirm budget, timeline, and decision process");
-        break;
-      case "Met":
-        steps.push(`Send follow-up to ${firstName} from last meeting`);
-        steps.push("Share relevant case study or demo materials");
-        steps.push("Identify next steps and stakeholders involved");
-        break;
-      case "Follow-up":
-        steps.push(`Follow up with ${firstName} — re-engage the conversation`);
-        steps.push("Share new content or updates relevant to their needs");
-        steps.push("Propose a concrete next step (demo, pilot, call)");
-        break;
-      case "Demo Scheduled":
-        steps.push(`Prepare tailored demo for ${contact.company}`);
-        steps.push("Identify specific pain points to address in demo");
-        steps.push("Send calendar invite with agenda and prep materials");
-        break;
-      case "Pilot Agreed":
-        steps.push("Define pilot scope, timeline, and success criteria");
-        steps.push(`Send pilot agreement to ${firstName} for sign-off`);
-        steps.push("Set up pilot environment and onboarding");
-        break;
-      case "Pilot Active":
-        steps.push(`Check in with ${firstName} on pilot progress (weekly)`);
-        steps.push("Document wins and usage metrics for conversion pitch");
-        steps.push("Prepare conversion proposal based on pilot outcomes");
-        break;
-      case "Customer":
-        steps.push("Complete onboarding and account setup");
-        steps.push(`Schedule kickoff call with ${firstName}'s team`);
-        steps.push("Set 30/60/90 day check-in cadence");
-        break;
-      default:
-        steps.push(`Follow up with ${firstName}`);
-        steps.push("Update stage based on latest interaction");
-    }
+  mode: string,
+): Promise<EnrichmentResult> {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (!anthropicKey) {
+    console.error("ANTHROPIC_API_KEY not configured — falling back to basic enrichment");
+    return {};
   }
 
-  const doneStages = ["Customer", "Committed", "Pass", "Passed", "Churned"];
-  if (!contact.nextFollowUp && !doneStages.includes(stage)) {
-    steps.push("⚠️ Set a follow-up date");
-  }
+  const client = new Anthropic({ apiKey: anthropicKey });
 
-  return steps.map(s => `• ${s}`).join("\n");
+  const searchContext = searchResults
+    .slice(0, 15)
+    .map((r) => `[${r.url}]\n${r.title}\n${r.description}`)
+    .join("\n\n");
+
+  const prompt = `You are enriching a CRM contact for a B2B SaaS company (UserLabs — AI-powered qualitative research platform). Analyze the search results and website content to create a comprehensive profile.
+
+CONTACT: ${contactName}
+KNOWN ROLE: ${contactRole || "Unknown"}
+KNOWN COMPANY: ${contactCompany || "Unknown"}
+MODE: ${mode} (${mode === "investor" ? "this is a potential investor" : "this is a potential customer/prospect"})
+MEETINGS SO FAR: ${meetingCount}
+
+SEARCH RESULTS:
+${searchContext}
+
+${websiteContent ? `COMPANY WEBSITE CONTENT:\n${websiteContent}` : "No website content available."}
+
+Based on ALL available data, return a JSON object with these fields. Be concise but informative. If you can't determine something, use null. Do NOT make things up — only include what the data supports.
+
+{
+  "personSummary": "2-3 sentence bio. Work history highlights, current role, notable experience. Focus on what would be useful to know before a sales meeting.",
+  "company": "Current company name (correct if the known company is wrong or Unknown)",
+  "role": "Current job title (correct if the known role is wrong or Unknown)", 
+  "companyDescription": "What the company does in 2-3 sentences, written from their perspective. What they sell, who they serve, what problem they solve. Use their own website language if available.",
+  "companySize": "Employee count range if known (e.g. '50-200', '1000+', 'Startup (<50)')",
+  "companyIndustry": "Primary industry (e.g. 'EdTech', 'FinTech', 'Healthcare', 'Real Estate')",
+  "companyType": "B2B, B2C, or B2B2C",
+  "companyLocation": "Company HQ location",
+  "companyFunding": "Funding info if available (e.g. '$95M Series B', 'Bootstrapped', 'Pre-seed')",
+  "location": "Person's location if known",
+  "pilotOpportunities": "Based on what you know about their company: what potential opportunities exist for UserLabs (AI qualitative research tool)? How might they use AI-moderated user research? Who are their end users that they might want to research? 2-3 bullet points.",
+  "suggestedNextSteps": "3 actionable next steps for the upcoming meeting, formatted as bullet points with • prefix. Consider: what to research, what to ask about, how to position UserLabs for their specific needs."
 }
 
+Return ONLY valid JSON, no markdown code fences.`;
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1000,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const text = response.content[0].type === "text" ? response.content[0].text : "";
+    // Parse JSON — handle potential markdown fences
+    const jsonStr = text.replace(/^```json?\n?/m, "").replace(/\n?```$/m, "").trim();
+    const data = JSON.parse(jsonStr);
+
+    const result: EnrichmentResult = {};
+    if (data.personSummary) result.personSummary = data.personSummary;
+    if (data.company && data.company !== "Unknown") result.company = data.company;
+    if (data.role && data.role !== "Unknown") result.role = data.role;
+    if (data.companyDescription) result.companyDescription = data.companyDescription;
+    if (data.companySize) result.companySize = data.companySize;
+    if (data.companyIndustry) result.companyIndustry = data.companyIndustry;
+    if (data.companyType) result.companyType = data.companyType;
+    if (data.companyLocation) result.companyLocation = data.companyLocation;
+    if (data.companyFunding) result.companyFunding = data.companyFunding;
+    if (data.location) result.location = data.location;
+    if (data.pilotOpportunities) result.pilotOpportunities = data.pilotOpportunities;
+    if (data.suggestedNextSteps) result.suggestedNextSteps = data.suggestedNextSteps;
+
+    return result;
+  } catch (error) {
+    console.error("AI synthesis error:", error);
+    return {};
+  }
+}
+
+// ─── Main enrichment endpoint ───
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -261,96 +212,65 @@ export async function POST(
   }
 
   try {
-    const braveSearch = async (query: string, count = 5): Promise<BraveWebResult[]> => {
-      const res = await fetch(
-        `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`,
-        { headers: { "X-Subscription-Token": braveApiKey, Accept: "application/json" } }
-      );
-      const data: BraveSearchResponse = await res.json();
-      return data.web?.results || [];
-    };
-
     const companyName = contact.company && contact.company !== "Unknown" ? contact.company : "";
-    const firstName = contact.name.split(" ")[0];
 
-    // Multi-query strategy: 4 targeted searches in parallel
-    const [personResults, careerResults, companyResults, pressResults] = await Promise.all([
-      // Q1: Person + role background (non-LinkedIn sources preferred)
-      braveSearch(`"${contact.name}" ${companyName} background OR career OR experience`, 8),
-      // Q2: Career history from data aggregators
-      braveSearch(`"${contact.name}" site:adapt.io OR site:crunchbase.com OR site:zoominfo.com OR site:apollo.io`, 5),
-      // Q3: Company info from quality sources
+    // Step 1: Multi-query Brave search (parallel)
+    const [personResults, careerResults, companyResults, companyGeneralResults] = await Promise.all([
+      braveSearch(`"${contact.name}" ${companyName} background OR career OR experience`, braveApiKey, 8),
+      braveSearch(`"${contact.name}" site:adapt.io OR site:crunchbase.com OR site:zoominfo.com`, braveApiKey, 5),
       companyName
-        ? braveSearch(`"${companyName}" company funding OR about OR founded site:crunchbase.com OR site:pitchbook.com`, 5)
+        ? braveSearch(`"${companyName}" company about OR funding OR founded`, braveApiKey, 5)
         : Promise.resolve([]),
-      // Q4: Company general info
       companyName
-        ? braveSearch(`"${companyName}" company`, 5)
+        ? braveSearch(`${companyName}`, braveApiKey, 5)
         : Promise.resolve([]),
     ]);
 
-    const allResults = [...personResults, ...careerResults, ...companyResults, ...pressResults];
-    const allCompanyResults = [...companyResults, ...pressResults];
-    const allText = allResults.map((r) => `${r.title} ${r.description}`).join(" ");
+    const allResults = [...personResults, ...careerResults, ...companyResults, ...companyGeneralResults];
 
-    // Build person bio — prefer non-LinkedIn sources, then career data sites
-    const nonLinkedInResults = [...personResults, ...careerResults].filter(
-      (r) => !r.url.includes("linkedin.com")
-    );
-    const bioSources = nonLinkedInResults.length > 0 ? nonLinkedInResults : personResults;
-    const personBioResults = bioSources.filter(
-      (r) => r.description.toLowerCase().includes(firstName.toLowerCase())
-    );
+    // Step 2: Find LinkedIn URL
+    const linkedinUrl = contact.linkedinUrl || extractLinkedIn(allResults);
 
-    // Try to extract career history from adapt.io/similar (structured data)
-    const careerDataResults = careerResults.filter(
-      (r) => (r.url.includes("adapt.io") || r.url.includes("zoominfo") || r.url.includes("apollo.io"))
-        && r.description.toLowerCase().includes(firstName.toLowerCase())
-    );
-
-    let personSummary: string | undefined;
-    if (careerDataResults.length > 0) {
-      // Career data sites have the best structured info
-      personSummary = careerDataResults.slice(0, 2).map((r) => r.description).join(" ").slice(0, 600);
-    } else if (personBioResults.length > 0) {
-      personSummary = personBioResults.slice(0, 2).map((r) => r.description).join(" ").slice(0, 600);
-    } else {
-      personSummary = extractFromResults(bioSources, [firstName]);
+    // Step 3: Find and scrape company website
+    const companyUrl = findCompanyUrl([...companyResults, ...companyGeneralResults], companyName);
+    let websiteContent = "";
+    if (companyUrl) {
+      websiteContent = await scrapeWebsite(companyUrl);
     }
 
-    // Try to infer company from results if unknown
-    let inferredCompany = companyName;
-    if (!inferredCompany) {
-      // Look for company mentions in career data
-      const companyMatch = allText.match(new RegExp(`${firstName}[^.]*?(?:at|Head of Product at|VP at|Director at|CPO at)\\s+([A-Z][\\w]+(?:\\s+[A-Z][\\w]+)?)`, 'i'));
-      if (companyMatch) inferredCompany = companyMatch[1];
-    }
-
-    const clean = (v: string | undefined) => v ? cleanText(v) || undefined : undefined;
-
-    // Generate suggested next steps based on stage and context
+    // Step 4: Get meeting count for context
     const meetings = await getContactMeetings(id);
-    const suggestedNextSteps = generateNextSteps(contact.stage as PipelineStage, contact.mode || "prospect", meetings.length, contact);
 
-    const enrichment: Record<string, string | undefined> = {
-      suggestedNextSteps,
-      linkedinUrl: contact.linkedinUrl || extractLinkedIn(allResults),
-      location: contact.location || clean(extractLocation(allText)),
-      personSummary: contact.personSummary || clean(personSummary),
-      companyDescription: contact.companyDescription || clean(extractFromResults(allCompanyResults, [inferredCompany || contact.company])),
-      companySize: contact.companySize || inferCompanySize(allText),
-      companyIndustry: contact.companyIndustry || inferIndustry(allText),
-      companyType: contact.companyType || inferCompanyType(allText),
-      companyLocation: contact.companyLocation || clean(extractLocation(allCompanyResults.map((r) => r.description).join(" "))),
-      companyFunding: contact.companyFunding || extractFunding(allText),
-    };
+    // Step 5: AI synthesis
+    const enrichment = await synthesizeWithAI(
+      contact.name,
+      contact.company,
+      contact.role,
+      allResults,
+      websiteContent,
+      meetings.length,
+      contact.mode || "prospect",
+    );
 
-    // Auto-fill company if it was unknown
-    if ((!contact.company || contact.company === "Unknown") && inferredCompany) {
-      enrichment.company = inferredCompany;
+    // Add LinkedIn URL
+    if (linkedinUrl) enrichment.linkedinUrl = linkedinUrl;
+
+    // Only update fields that are new or better (don't overwrite good data with empty)
+    const updateData: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(enrichment)) {
+      if (value && value !== "null" && value !== "Unknown") {
+        const currentValue = (contact as unknown as Record<string, unknown>)[key];
+        // Always update if current is empty, Unknown, or we have better data
+        if (!currentValue || currentValue === "Unknown" || currentValue === "") {
+          updateData[key] = value;
+        } else if (key === "suggestedNextSteps" || key === "pilotOpportunities") {
+          // Always refresh these
+          updateData[key] = value;
+        }
+      }
     }
 
-    const updated = await updateContact(id, enrichment);
+    const updated = await updateContact(id, updateData);
     return NextResponse.json(updated);
   } catch (error) {
     console.error("Enrichment error:", error);
