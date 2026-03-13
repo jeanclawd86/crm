@@ -61,6 +61,17 @@ export async function POST(req: NextRequest) {
           VALUES (${id}, ${m.contactId}, ${m.title}, ${m.dateTime}, ${m.duration}, ${m.calendarEventId ?? null}, ${m.granolaId ?? null}, ${m.granolaSummary ?? null}, ${m.granolaTranscript ?? null}, ${m.userNotes ?? null})
         `;
         synced++;
+
+        // Auto-enrich unenriched contacts (fire and forget)
+        const { rows: cRows } = await sql`SELECT person_summary FROM contacts WHERE id = ${m.contactId}`;
+        if (cRows.length > 0 && !cRows[0].person_summary) {
+          const baseUrl = req.nextUrl.origin;
+          const apiKey = req.headers.get("x-api-key") || "";
+          fetch(`${baseUrl}/api/contacts/${m.contactId}/enrich`, {
+            method: "POST",
+            headers: { "x-api-key": apiKey },
+          }).catch(() => {});
+        }
       } catch (err) {
         errors.push(`Failed to sync meeting "${m.title}": ${String(err)}`);
       }

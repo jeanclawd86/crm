@@ -80,6 +80,17 @@ export async function POST(req: NextRequest) {
       await sql`INSERT INTO meetings (id, contact_id, title, date_time, duration, calendar_event_id) 
         VALUES (${meetingId}, ${contactId}, ${event.summary}, ${event.start}, ${duration}, ${event.id})`;
       synced++;
+
+      // Auto-enrich unenriched contacts (fire and forget)
+      const contactData = await sql`SELECT person_summary FROM contacts WHERE id = ${contactId}`;
+      if (contactData.length > 0 && !contactData[0].person_summary) {
+        const baseUrl = req.nextUrl.origin;
+        const apiKey = req.headers.get("x-api-key") || "";
+        fetch(`${baseUrl}/api/contacts/${contactId}/enrich`, {
+          method: "POST",
+          headers: { "x-api-key": apiKey },
+        }).catch(() => {}); // fire and forget
+      }
     }
 
     return NextResponse.json({ synced, skipped, total: events.length });
