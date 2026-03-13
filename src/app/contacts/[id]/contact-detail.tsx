@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { stageColors, stageDotColors } from "@/lib/stage-colors";
 import { FollowUpDropdown } from "@/components/follow-up-dropdown";
+import { ContactChat } from "@/components/contact-chat";
 import { PipelineStage, Activity, Contact, Meeting, Email, getStagesForMode } from "@/lib/types";
 
 function ActivityIcon({ type }: { type: Activity["type"] }) {
@@ -837,6 +838,7 @@ export function ContactDetail({
           </Card>
         </div>
       </div>
+      <ContactChat contactId={contact.id} contactName={contact.name} />
     </div>
   );
 }
