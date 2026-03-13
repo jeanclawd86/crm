@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createContact } from "@/lib/db";
+import { getAllContacts, createContact } from "@/lib/db";
 import { checkAuth } from "@/lib/auth";
+import { ContactMode } from "@/lib/types";
+
+export async function GET(req: NextRequest) {
+  const mode = req.nextUrl.searchParams.get("mode") as ContactMode | null;
+  try {
+    const contacts = await getAllContacts(mode || undefined);
+    return NextResponse.json(contacts);
+  } catch (error) {
+    console.error("Get contacts error:", error);
+    return NextResponse.json({ error: "Failed to get contacts" }, { status: 500 });
+  }
+}
 
 export async function POST(req: NextRequest) {
   const authError = checkAuth(req);
