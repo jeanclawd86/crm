@@ -600,10 +600,7 @@ export function ContactDetail({
                   <div className="mt-1"><InlineEdit value={localContact.email} onSave={(v) => patchField("email", v)} className="text-xs text-muted-foreground" placeholder="Add email" /></div>
                 </div>
               </div>
-              <div className="flex gap-2 mt-3">
-                <Badge className={stageColors[stage]} variant="secondary">{stage}</Badge>
-                <Badge variant="outline" className="text-xs">{mode}</Badge>
-              </div>
+              {/* Stage and mode shown in Pipeline Stage card instead */}
             </CardContent>
           </Card>
 
