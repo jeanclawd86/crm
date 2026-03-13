@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -19,15 +19,29 @@ export function ContactsTable({
   initialStage?: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<PipelineStage | "All">(
     (initialStage as PipelineStage) || "All"
   );
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState(false);
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Partial<Contact>>>(new Map());
 
   const stages: (PipelineStage | "All")[] = ["All", ...getStagesForMode(mode)];
   const companyLabel = mode === "investor" ? "Fund" : "Company";
+
+  const changeStageFilter = useCallback((stage: PipelineStage | "All") => {
+    setStageFilter(stage);
+    const params = new URLSearchParams(searchParams.toString());
+    if (stage === "All") {
+      params.delete("stage");
+    } else {
+      params.set("stage", stage);
+    }
+    params.set("mode", mode);
+    router.replace(`/contacts?${params.toString()}`, { scroll: false });
+  }, [searchParams, mode, router]);
 
   useEffect(() => {
     if (initialStage) {
@@ -35,8 +49,15 @@ export function ContactsTable({
     }
   }, [initialStage]);
 
+  const contactsWithOptimistic = useMemo(() => {
+    return contacts.map((c) => {
+      const update = optimisticUpdates.get(c.id);
+      return update ? { ...c, ...update } : c;
+    });
+  }, [contacts, optimisticUpdates]);
+
   const filtered = useMemo(() => {
-    return contacts.filter((c) => {
+    return contactsWithOptimistic.filter((c) => {
       const matchesSearch =
         !search ||
         c.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -44,7 +65,7 @@ export function ContactsTable({
       const matchesStage = stageFilter === "All" || c.stage === stageFilter;
       return matchesSearch && matchesStage;
     });
-  }, [contacts, search, stageFilter]);
+  }, [contactsWithOptimistic, search, stageFilter]);
 
   const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
 
@@ -63,18 +84,37 @@ export function ContactsTable({
     setSelected(next);
   }
 
+  function applyOptimistic(id: string, update: Partial<Contact>) {
+    setOptimisticUpdates((prev) => {
+      const next = new Map(prev);
+      next.set(id, { ...(prev.get(id) || {}), ...update });
+      return next;
+    });
+  }
+
+  async function patchContact(id: string, data: Record<string, unknown>) {
+    const res = await fetch(`/api/contacts/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      // Revert optimistic update on failure
+      setOptimisticUpdates((prev) => {
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+    return res;
+  }
+
   async function bulkSetStage(newStage: PipelineStage) {
     setBulkAction(true);
+    const ids = Array.from(selected);
+    ids.forEach((id) => applyOptimistic(id, { stage: newStage }));
     try {
-      await Promise.all(
-        Array.from(selected).map((id) =>
-          fetch(`/api/contacts/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ stage: newStage }),
-          })
-        )
-      );
+      await Promise.all(ids.map((id) => patchContact(id, { stage: newStage })));
       setSelected(new Set());
       router.refresh();
     } finally {
@@ -84,16 +124,10 @@ export function ContactsTable({
 
   async function bulkSetFollowUp(date: string) {
     setBulkAction(true);
+    const ids = Array.from(selected);
+    ids.forEach((id) => applyOptimistic(id, { nextFollowUp: date }));
     try {
-      await Promise.all(
-        Array.from(selected).map((id) =>
-          fetch(`/api/contacts/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nextFollowUp: date }),
-          })
-        )
-      );
+      await Promise.all(ids.map((id) => patchContact(id, { nextFollowUp: date })));
       setSelected(new Set());
       router.refresh();
     } finally {
@@ -101,24 +135,17 @@ export function ContactsTable({
     }
   }
 
-  async function quickAction(contactId: string, action: "pass" | "follow_up") {
-    if (action === "pass") {
-      const passStage = mode === "investor" ? "Passed" : "Pass";
-      await fetch(`/api/contacts/${contactId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stage: passStage }),
-      });
-      router.refresh();
-    } else {
-      const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-      await fetch(`/api/contacts/${contactId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nextFollowUp: tomorrow }),
-      });
-      router.refresh();
-    }
+  async function quickPass(contactId: string) {
+    const passStage = mode === "investor" ? "Passed" : "Pass";
+    applyOptimistic(contactId, { stage: passStage as PipelineStage });
+    await patchContact(contactId, { stage: passStage });
+    router.refresh();
+  }
+
+  async function quickSetFollowUp(contactId: string, date: string) {
+    applyOptimistic(contactId, { nextFollowUp: date });
+    await patchContact(contactId, { nextFollowUp: date });
+    router.refresh();
   }
 
   return (
@@ -182,11 +209,20 @@ export function ContactsTable({
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs h-9 text-sm"
             />
+            <select
+              value={stageFilter}
+              onChange={(e) => changeStageFilter(e.target.value as PipelineStage | "All")}
+              className="h-9 text-sm px-3 pr-8 rounded-md border border-input bg-background"
+            >
+              {stages.map((stage) => (
+                <option key={stage} value={stage}>{stage}</option>
+              ))}
+            </select>
             <div className="flex gap-1 ml-auto flex-wrap">
               {stages.map((stage) => (
                 <button
                   key={stage}
-                  onClick={() => setStageFilter(stage)}
+                  onClick={() => changeStageFilter(stage)}
                   className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
                     stageFilter === stage
                       ? "bg-primary text-primary-foreground"
@@ -216,7 +252,7 @@ export function ContactsTable({
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Stage</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Follow-up</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Source</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 w-16"></th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3 w-20">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -249,17 +285,26 @@ export function ContactsTable({
                       {contact.stage}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {contact.nextFollowUp
-                      ? new Date(contact.nextFollowUp + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
-                      : "—"}
+                  <td className="px-4 py-3">
+                    <input
+                      type="date"
+                      value={contact.nextFollowUp || ""}
+                      onChange={(e) => quickSetFollowUp(contact.id, e.target.value)}
+                      className="text-sm px-2 py-1 rounded-md border border-input bg-background w-[130px]"
+                      title="Set follow-up date"
+                    />
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{contact.source}</td>
                   <td className="px-4 py-3">
-                    <QuickActions
-                      contactId={contact.id}
-                      onAction={quickAction}
-                    />
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => quickPass(contact.id)}
+                        className="text-xs px-2 py-1 rounded-md border border-input bg-background hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                        title="Pass"
+                      >
+                        Pass
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -278,44 +323,3 @@ export function ContactsTable({
   );
 }
 
-function QuickActions({
-  contactId,
-  onAction,
-}: {
-  contactId: string;
-  onAction: (id: string, action: "pass" | "follow_up") => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-accent transition-colors"
-      >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
-        </svg>
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-20 bg-popover border border-border rounded-md shadow-md py-1 min-w-[140px]">
-            <button
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
-              onClick={() => { onAction(contactId, "pass"); setOpen(false); }}
-            >
-              Pass
-            </button>
-            <button
-              className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent transition-colors"
-              onClick={() => { onAction(contactId, "follow_up"); setOpen(false); }}
-            >
-              Follow-up Tomorrow
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
