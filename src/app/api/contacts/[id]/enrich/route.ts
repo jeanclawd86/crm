@@ -444,9 +444,10 @@ export async function POST(
     for (const [key, value] of Object.entries(enrichment)) {
       if (value && value !== "null" && value !== "Unknown") {
         const currentValue = (contact as unknown as Record<string, unknown>)[key];
-        if (!currentValue || currentValue === "Unknown" || currentValue === "") {
+        const junkValues = ["Unknown", "", "Professional Profile", "employed"];
+        if (!currentValue || junkValues.includes(String(currentValue))) {
           updateData[key] = value;
-        } else if (key === "suggestedNextSteps" || key === "pilotOpportunities" || key === "personSummary" || key === "companyDescription") {
+        } else if (key === "suggestedNextSteps" || key === "pilotOpportunities" || key === "personSummary" || key === "companyDescription" || key === "role" || key === "company") {
           // Always refresh these key fields
           updateData[key] = value;
         }
