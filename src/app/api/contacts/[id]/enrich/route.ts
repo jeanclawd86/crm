@@ -31,6 +31,37 @@ interface EnrichmentResult {
   suggestedNextSteps?: string;
 }
 
+interface PDLExperience {
+  company?: { name?: string; size?: string; industry?: string; website?: string };
+  title?: { name?: string } | string;
+  start_date?: string;
+  end_date?: string | null;
+  is_primary?: boolean;
+  location_names?: string[];
+}
+
+interface PDLPerson {
+  full_name?: string;
+  job_title?: string;
+  job_company_name?: string;
+  linkedin_url?: string;
+  location_name?: string;
+  experience?: PDLExperience[];
+}
+
+interface ApolloOrg {
+  name?: string;
+  industry?: string;
+  estimated_num_employees?: number;
+  founded_year?: number;
+  total_funding_printed?: string;
+  linkedin_url?: string;
+  short_description?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+}
+
 // ─── Brave Search helper ───
 async function braveSearch(query: string, apiKey: string, count = 5): Promise<BraveWebResult[]> {
   try {
@@ -99,6 +130,83 @@ function findCompanyUrl(results: BraveWebResult[], companyName: string): string 
   return undefined;
 }
 
+// ─── People Data Labs enrichment ───
+async function enrichWithPDL(name: string, company: string, linkedinUrl?: string): Promise<{ person: PDLPerson | null; raw: string }> {
+  const pdlKey = process.env.PDL_API_KEY;
+  if (!pdlKey) return { person: null, raw: "" };
+
+  try {
+    const params = new URLSearchParams({ pretty: "true" });
+    if (linkedinUrl) {
+      // LinkedIn URL is the most reliable match
+      params.set("profile", linkedinUrl);
+    } else {
+      const nameParts = name.split(" ");
+      if (nameParts.length >= 2) {
+        params.set("first_name", nameParts[0]);
+        params.set("last_name", nameParts.slice(1).join(" "));
+      } else {
+        params.set("name", name);
+      }
+      if (company && company !== "Unknown") {
+        params.set("company", company);
+      }
+    }
+
+    const res = await fetch(`https://api.peopledatalabs.com/v5/person/enrich?${params}`, {
+      headers: { "X-Api-Key": pdlKey },
+    });
+    const data = await res.json();
+
+    if (data.status === 200 && data.data) {
+      const p: PDLPerson = data.data;
+      // Format experience into readable text for Claude
+      const expText = (p.experience || []).map((e: PDLExperience) => {
+        const title = typeof e.title === "object" ? e.title?.name : e.title;
+        const companyName = e.company?.name || "Unknown";
+        const start = e.start_date || "?";
+        const end = e.end_date || "present";
+        return `• ${companyName} — ${title || "Unknown role"} (${start} → ${end})`;
+      }).join("\n");
+
+      return {
+        person: p,
+        raw: `PDL PROFILE DATA:\nName: ${p.full_name}\nCurrent Title: ${p.job_title}\nCurrent Company: ${p.job_company_name}\nLinkedIn: ${p.linkedin_url}\nLocation: ${p.location_name}\n\nWORK HISTORY:\n${expText}`,
+      };
+    }
+    return { person: null, raw: "" };
+  } catch (e) {
+    console.error("PDL enrichment error:", e);
+    return { person: null, raw: "" };
+  }
+}
+
+// ─── Apollo Organization enrichment ───
+async function enrichOrgWithApollo(domain: string): Promise<{ org: ApolloOrg | null; raw: string }> {
+  const apolloKey = process.env.APOLLO_API_KEY;
+  if (!apolloKey || !domain) return { org: null, raw: "" };
+
+  try {
+    const res = await fetch("https://api.apollo.io/api/v1/organizations/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Api-Key": apolloKey },
+      body: JSON.stringify({ domain }),
+    });
+    const data = await res.json();
+    const o: ApolloOrg = data.organization;
+    if (!o) return { org: null, raw: "" };
+
+    const location = [o.city, o.state, o.country].filter(Boolean).join(", ");
+    return {
+      org: o,
+      raw: `APOLLO ORG DATA:\nName: ${o.name}\nIndustry: ${o.industry}\nEmployees: ${o.estimated_num_employees}\nFounded: ${o.founded_year}\nFunding: ${o.total_funding_printed}\nLocation: ${location}\nDescription: ${o.short_description}`,
+    };
+  } catch (e) {
+    console.error("Apollo org enrichment error:", e);
+    return { org: null, raw: "" };
+  }
+}
+
 // ─── AI Synthesis via Claude ───
 async function synthesizeWithAI(
   contactName: string,
@@ -107,6 +215,8 @@ async function synthesizeWithAI(
   searchResults: BraveWebResult[],
   websiteContent: string,
   meetingContext: string,
+  pdlData: string,
+  apolloOrgData: string,
   mode: string,
 ): Promise<EnrichmentResult> {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -129,6 +239,8 @@ KNOWN ROLE: ${contactRole || "Unknown"}
 KNOWN COMPANY: ${contactCompany || "Unknown"}
 MODE: ${mode} (${mode === "investor" ? "potential investor" : "potential customer/prospect"})
 
+${pdlData ? `${pdlData}\n` : ""}
+${apolloOrgData ? `${apolloOrgData}\n` : ""}
 SEARCH RESULTS:
 ${searchContext}
 
@@ -139,23 +251,23 @@ ${meetingContext ? `MEETING NOTES & TRANSCRIPTS:\n${meetingContext}` : "No meeti
 Return a JSON object with these fields. Be factual — only include what the data supports.
 
 {
-  "personSummary": "A mini resume. Format as:\\n\\nCurrent role and company (1 sentence).\\n\\nWork history as bullet points — each bullet is: Company Name — Role (dates if known). 1-2 sentences on what that company does.\\n\\nExample:\\n'VP of Product at Acme Corp, a Series B enterprise analytics platform.\\n\\n• Google — Senior PM (2018-2021). Built and scaled Google's enterprise search product for Fortune 500 customers.\\n• Stripe — Product Lead (2015-2018). Led Stripe's billing infrastructure team, scaling to process $100B+ in annual transactions.\\n• McKinsey — Associate (2013-2015). Strategy consulting focused on technology and digital transformation for financial services clients.'\\n\\nOnly include roles you have evidence for. 2-5 roles max.",
+  "personSummary": "A mini resume. Format as:\\n\\nCurrent role and company (1 sentence).\\n\\nWork history as bullet points — each bullet is: Company Name — Role (start_date → end_date). 1-2 sentences on what that company does.\\n\\nUSE THE PDL WORK HISTORY DATA for accurate role names, companies, and date ranges. Include all significant roles (up to 6-8). Format dates as 'Mon YYYY' (e.g. 'May 2021 → present').\\n\\nExample:\\n'VP of Product at Acme Corp, a Series B enterprise analytics platform.\\n\\n• Google — Senior PM (Jan 2018 → Dec 2021). Built and scaled Google's enterprise search product for Fortune 500 customers.\\n• Stripe — Product Lead (Mar 2015 → Jan 2018). Led Stripe's billing infrastructure team, scaling to process $100B+ in annual transactions.'",
   
-  "company": "Current company name (correct if wrong or Unknown)",
-  "role": "Current job title (correct if wrong or Unknown)",
+  "company": "Current company name (use PDL data to correct if needed)",
+  "role": "Current job title (use PDL data to correct if needed)",
   
-  "companyDescription": "A thorough description of the company. Format as:\\n\\n1st paragraph: What they do, who they serve, what problem they solve. Use their own language from their website if available.\\n\\n2nd paragraph: Market position, key differentiators, notable traction or customers if known.\\n\\nShould be 3-5 sentences total.",
+  "companyDescription": "A thorough description of the company. Format as:\\n\\n1st paragraph: What they do, who they serve, what problem they solve. Use their own language from their website if available.\\n\\n2nd paragraph: Market position, key differentiators, notable traction or customers if known. Include Apollo org data (employee count, funding, founded year) if available.\\n\\nShould be 3-5 sentences total.",
   
-  "companySize": "Employee count range (e.g. '50-200', '1000+', 'Startup (<50)')",
-  "companyIndustry": "Primary industry (e.g. 'EdTech', 'FinTech', 'Healthcare')",
+  "companySize": "Employee count (use Apollo data if available, e.g. '99 employees', '500-1000')",
+  "companyIndustry": "Primary industry",
   "companyType": "B2B, B2C, or B2B2C",
-  "companyLocation": "Company HQ location",
-  "companyFunding": "Funding info if available (e.g. '$95M Series B', 'Bootstrapped')",
-  "location": "Person's location if known",
+  "companyLocation": "Company HQ location (use Apollo data if available)",
+  "companyFunding": "Funding info (use Apollo data if available)",
+  "location": "Person's location (use PDL data if available)",
   
-  "pilotOpportunities": "A single string with bullet points separated by newlines. Each line starts with • and must be LABELED as either [FROM MEETING] or [HYPOTHESIS].\\n\\n[FROM MEETING] = grounded in something actually discussed in meetings/calls. Reference the specific context.\\n[HYPOTHESIS] = educated guess based on company research, not yet validated in conversation.\\n\\nExample:\\n'• [FROM MEETING] They mentioned struggling with user onboarding research for their enterprise tier — UserLabs could run moderated sessions with their enterprise admins.\\n• [HYPOTHESIS] With 500K+ end users across K-12, they likely need ongoing UX research to improve educator and family experiences.\\n• [HYPOTHESIS] Their expansion into state agency workflows could benefit from UserLabs interviews with government procurement stakeholders.'\\n\\n2-4 bullets total.",
+  "pilotOpportunities": "A single string with bullet points separated by newlines. Each line starts with • and must be LABELED as either [FROM MEETING] or [HYPOTHESIS].\\n\\n[FROM MEETING] = grounded in something actually discussed in meetings/calls. Reference the specific context.\\n[HYPOTHESIS] = educated guess based on company research, not yet validated in conversation.\\n\\n2-4 bullets total.",
   
-  "suggestedNextSteps": "A single string with 3 bullet points separated by newlines. Each starts with •. Actionable, specific next steps for the relationship. Consider what to research, ask about, or propose based on everything known."
+  "suggestedNextSteps": "A single string with 3 bullet points separated by newlines. Each starts with •. Actionable, specific next steps for the relationship."
 }
 
 IMPORTANT: All multi-line string fields use \\n for newlines. Return ONLY valid JSON, no markdown code fences.`;
@@ -225,8 +337,8 @@ export async function POST(
   try {
     const companyName = contact.company && contact.company !== "Unknown" ? contact.company : "";
 
-    // Step 1: Multi-query Brave search (parallel)
-    const [personResults, careerResults, companyResults, companyGeneralResults] = await Promise.all([
+    // Step 1: All data gathering in parallel
+    const [personResults, careerResults, companyResults, companyGeneralResults, pdlResult, apolloOrgResult] = await Promise.all([
       braveSearch(`"${contact.name}" ${companyName} background OR career OR experience`, braveApiKey, 8),
       braveSearch(`"${contact.name}" site:adapt.io OR site:crunchbase.com OR site:zoominfo.com`, braveApiKey, 5),
       companyName
@@ -235,12 +347,26 @@ export async function POST(
       companyName
         ? braveSearch(`${companyName}`, braveApiKey, 5)
         : Promise.resolve([]),
+      // PDL person enrichment
+      enrichWithPDL(contact.name, companyName, contact.linkedinUrl),
+      // Apollo org enrichment (extract domain from email or company name)
+      (() => {
+        const email = contact.email || "";
+        const domain = email.includes("@") ? email.split("@")[1] : "";
+        // Skip common email domains
+        if (!domain || ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "icloud.com", "me.com", "aol.com"].includes(domain)) {
+          return Promise.resolve({ org: null, raw: "" });
+        }
+        return enrichOrgWithApollo(domain);
+      })(),
     ]);
 
     const allResults = [...personResults, ...careerResults, ...companyResults, ...companyGeneralResults];
 
-    // Step 2: Find LinkedIn URL
-    const linkedinUrl = contact.linkedinUrl || extractLinkedIn(allResults);
+    // Step 2: Find LinkedIn URL (PDL > Brave search)
+    const linkedinUrl = contact.linkedinUrl
+      || (pdlResult.person?.linkedin_url ? `https://${pdlResult.person.linkedin_url}` : undefined)
+      || extractLinkedIn(allResults);
 
     // Step 3: Find and scrape company website
     const companyUrl = findCompanyUrl([...companyResults, ...companyGeneralResults], companyName);
@@ -249,7 +375,7 @@ export async function POST(
       websiteContent = await scrapeWebsite(companyUrl);
     }
 
-    // Step 4: Gather meeting context (summaries, notes, transcripts)
+    // Step 4: Gather meeting context
     const meetings = await getContactMeetings(id);
     let meetingContext = "";
     if (meetings.length > 0) {
@@ -263,13 +389,12 @@ export async function POST(
           return parts.join("\n");
         })
         .join("\n\n---\n\n");
-      // Cap total meeting context at 8000 chars
       if (meetingContext.length > 8000) {
         meetingContext = meetingContext.slice(0, 8000) + "\n[...truncated]";
       }
     }
 
-    // Step 5: AI synthesis with meeting context
+    // Step 5: AI synthesis with ALL data sources
     const enrichment = await synthesizeWithAI(
       contact.name,
       contact.company,
@@ -277,11 +402,32 @@ export async function POST(
       allResults,
       websiteContent,
       meetingContext,
+      pdlResult.raw,
+      apolloOrgResult.raw,
       contact.mode || "prospect",
     );
 
     // Add LinkedIn URL
     if (linkedinUrl) enrichment.linkedinUrl = linkedinUrl;
+
+    // Use PDL location if available
+    if (!enrichment.location && pdlResult.person?.location_name) {
+      enrichment.location = String(pdlResult.person.location_name);
+    }
+
+    // Use Apollo org data for company fields if available and not already set
+    if (apolloOrgResult.org) {
+      const o = apolloOrgResult.org;
+      if (!enrichment.companySize && o.estimated_num_employees) {
+        enrichment.companySize = `${o.estimated_num_employees} employees`;
+      }
+      if (!enrichment.companyFunding && o.total_funding_printed) {
+        enrichment.companyFunding = o.total_funding_printed;
+      }
+      if (!enrichment.companyIndustry && o.industry) {
+        enrichment.companyIndustry = o.industry;
+      }
+    }
 
     // Smart update — don't overwrite good data with empty
     const updateData: Record<string, string | undefined> = {};
