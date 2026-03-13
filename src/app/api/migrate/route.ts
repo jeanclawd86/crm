@@ -49,7 +49,10 @@ export async function POST() {
     await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS pilot_opportunities TEXT`;
     await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS meeting_insights TEXT`;
 
-    return NextResponse.json({ success: true, message: "Migration complete: all enrichment, transcript, email, and archive columns added" });
+    // Meeting irrelevant flag
+    await sql`ALTER TABLE meetings ADD COLUMN IF NOT EXISTS irrelevant BOOLEAN NOT NULL DEFAULT FALSE`;
+
+    return NextResponse.json({ success: true, message: "Migration complete: all enrichment, transcript, email, archive, and meeting irrelevant columns added" });
   } catch (error) {
     console.error("Migration error:", error);
     return NextResponse.json(

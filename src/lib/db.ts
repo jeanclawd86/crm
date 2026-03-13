@@ -48,6 +48,7 @@ function rowToMeeting(row: Record<string, unknown>): Meeting {
     granolaId: (row.granola_id as string) || undefined,
     granolaTranscript: (row.granola_transcript as string) || undefined,
     granolaSummary: (row.granola_summary as string) || undefined,
+    irrelevant: row.irrelevant === true,
   };
 }
 
@@ -262,7 +263,7 @@ export async function createMeeting(data: Omit<Meeting, "id">): Promise<Meeting>
   return rowToMeeting(rows[0]);
 }
 
-type MeetingUpdateFields = Partial<Pick<Meeting, "title" | "dateTime" | "duration" | "granolaNote" | "preMeetingBrief" | "userNotes" | "granolaId" | "granolaTranscript" | "granolaSummary">>;
+type MeetingUpdateFields = Partial<Pick<Meeting, "title" | "dateTime" | "duration" | "granolaNote" | "preMeetingBrief" | "userNotes" | "granolaId" | "granolaTranscript" | "granolaSummary" | "irrelevant">>;
 
 export async function updateMeeting(id: string, data: MeetingUpdateFields): Promise<Meeting | undefined> {
   const current = await getMeeting(id);
@@ -276,11 +277,13 @@ export async function updateMeeting(id: string, data: MeetingUpdateFields): Prom
   const granolaId = data.granolaId !== undefined ? data.granolaId : (current.granolaId ?? null);
   const granolaTranscript = data.granolaTranscript !== undefined ? data.granolaTranscript : (current.granolaTranscript ?? null);
   const granolaSummary = data.granolaSummary !== undefined ? data.granolaSummary : (current.granolaSummary ?? null);
+  const irrelevant = data.irrelevant !== undefined ? data.irrelevant : current.irrelevant;
   const { rows } = await sql`
     UPDATE meetings
     SET title = ${title}, date_time = ${dateTime}, duration = ${duration},
         granola_note = ${granolaNote}, pre_meeting_brief = ${preMeetingBrief}, user_notes = ${userNotes},
-        granola_id = ${granolaId}, granola_transcript = ${granolaTranscript}, granola_summary = ${granolaSummary}
+        granola_id = ${granolaId}, granola_transcript = ${granolaTranscript}, granola_summary = ${granolaSummary},
+        irrelevant = ${irrelevant}
     WHERE id = ${id}
     RETURNING *
   `;

@@ -8,15 +8,39 @@ import { Separator } from "@/components/ui/separator";
 import { MeetingWithContact } from "@/lib/types";
 import { stageColors } from "@/lib/stage-colors";
 
-export function MeetingsList({ meetings }: { meetings: MeetingWithContact[] }) {
+export function MeetingsList({ meetings: initialMeetings }: { meetings: MeetingWithContact[] }) {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [meetings, setMeetings] = useState(initialMeetings);
+  const [hideIrrelevant, setHideIrrelevant] = useState(true);
+
+  async function toggleIrrelevant(meetingId: string, current: boolean) {
+    const newVal = !current;
+    setMeetings((prev) => prev.map((m) => m.id === meetingId ? { ...m, irrelevant: newVal } : m));
+    await fetch(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ irrelevant: newVal }),
+    });
+  }
+
+  const visibleMeetings = meetings.filter((m) => !hideIrrelevant || !m.irrelevant);
 
   return (
     <div className="p-8 max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Meetings</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-semibold tracking-tight">Meetings</h1>
+          {meetings.some((m) => m.irrelevant) && (
+            <button
+              onClick={() => setHideIrrelevant(!hideIrrelevant)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {hideIrrelevant ? "Show irrelevant" : "Hide irrelevant"}
+            </button>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground mt-1">
-          {meetings.length} meetings across all contacts
+          {visibleMeetings.length} meetings across all contacts
         </p>
       </div>
 
@@ -25,12 +49,12 @@ export function MeetingsList({ meetings }: { meetings: MeetingWithContact[] }) {
           <CardTitle className="text-base font-medium">All Meetings</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {meetings.length === 0 ? (
+          {visibleMeetings.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center">No meetings yet</p>
           ) : (
             <div className="divide-y divide-border">
-              {meetings.map((meeting) => (
-                <div key={meeting.id}>
+              {visibleMeetings.map((meeting) => (
+                <div key={meeting.id} className={meeting.irrelevant ? "opacity-50" : ""}>
                   <button
                     onClick={() => setExpanded(expanded === meeting.id ? null : meeting.id)}
                     className="w-full text-left p-4 hover:bg-accent/50 transition-colors"
@@ -38,7 +62,7 @@ export function MeetingsList({ meetings }: { meetings: MeetingWithContact[] }) {
                     <div className="flex items-center gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium truncate">{meeting.title}</p>
+                          <p className={`text-sm font-medium truncate ${meeting.irrelevant ? "line-through" : ""}`}>{meeting.title}</p>
                           {(meeting.granolaSummary || meeting.granolaNote) && (
                             <Badge variant="secondary" className="text-[10px] shrink-0">
                               Has summary
@@ -122,12 +146,20 @@ export function MeetingsList({ meetings }: { meetings: MeetingWithContact[] }) {
                           </div>
                         </div>
                       )}
-                      <Link
-                        href={`/contacts/${meeting.contactId}`}
-                        className="text-xs text-muted-foreground hover:text-foreground transition-colors inline-block"
-                      >
-                        View contact &rarr;
-                      </Link>
+                      <div className="flex gap-3">
+                        <Link
+                          href={`/contacts/${meeting.contactId}`}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          View contact &rarr;
+                        </Link>
+                        <button
+                          onClick={() => toggleIrrelevant(meeting.id, meeting.irrelevant)}
+                          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        >
+                          {meeting.irrelevant ? "Mark relevant" : "Mark irrelevant"}
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

@@ -77,6 +77,8 @@ export function ContactDetail({
   const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
   const [emails] = useState(initialEmails);
   const [localContact, setLocalContact] = useState(contact);
+  const [meetings, setMeetings] = useState(contactMeetings);
+  const [hideIrrelevantMeetings, setHideIrrelevantMeetings] = useState(true);
 
   const patchField = useCallback(async (field: string, value: string) => {
     const prev = localContact;
@@ -184,6 +186,16 @@ export function ContactDetail({
     } finally {
       setEnriching(false);
     }
+  }
+
+  async function toggleIrrelevant(meetingId: string, current: boolean) {
+    const newVal = !current;
+    setMeetings((prev) => prev.map((m) => m.id === meetingId ? { ...m, irrelevant: newVal } : m));
+    await fetch(`/api/meetings/${meetingId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ irrelevant: newVal }),
+    });
   }
 
   function getMeetingSummaryPreview(meeting: Meeting): string {
@@ -329,15 +341,27 @@ export function ContactDetail({
           {/* Meeting History */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-medium">Meeting History</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-medium">Meeting History</CardTitle>
+                {meetings.some((m) => m.irrelevant) && (
+                  <button
+                    onClick={() => setHideIrrelevantMeetings(!hideIrrelevantMeetings)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {hideIrrelevantMeetings ? "Show irrelevant" : "Hide irrelevant"}
+                  </button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
-              {contactMeetings.length === 0 ? (
+              {meetings.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">No meetings yet</p>
               ) : (
                 <div className="space-y-3">
-                  {contactMeetings.map((meeting) => (
-                    <div key={meeting.id} className="rounded-lg border border-border">
+                  {meetings
+                    .filter((m) => !hideIrrelevantMeetings || !m.irrelevant)
+                    .map((meeting) => (
+                    <div key={meeting.id} className={`rounded-lg border border-border ${meeting.irrelevant ? "opacity-50" : ""}`}>
                       <button
                         onClick={() => setExpandedMeeting(expandedMeeting === meeting.id ? null : meeting.id)}
                         className="w-full text-left p-3 hover:bg-accent/50 transition-colors rounded-lg"
@@ -345,7 +369,7 @@ export function ContactDetail({
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">{meeting.title}</p>
+                              <p className={`text-sm font-medium ${meeting.irrelevant ? "line-through" : ""}`}>{meeting.title}</p>
                               {(meeting.granolaSummary || meeting.granolaNote) && (
                                 <Badge variant="secondary" className="text-[10px]">Has summary</Badge>
                               )}
@@ -417,6 +441,12 @@ export function ContactDetail({
                             >
                               View full meeting &rarr;
                             </Link>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleIrrelevant(meeting.id, meeting.irrelevant); }}
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              {meeting.irrelevant ? "Mark relevant" : "Mark irrelevant"}
+                            </button>
                           </div>
                         </div>
                       )}

@@ -74,6 +74,7 @@ export interface Meeting {
   granolaId?: string;
   granolaTranscript?: string;
   granolaSummary?: string;
+  irrelevant: boolean;
 }
 
 export type ActivityType = "meeting" | "email" | "note" | "stage_change" | "follow_up_set";

@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
       granolaNote: body.granolaNote,
       preMeetingBrief: body.preMeetingBrief,
       userNotes: body.userNotes,
+      irrelevant: false,
     });
 
     return NextResponse.json(meeting, { status: 201 });

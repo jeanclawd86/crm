@@ -235,6 +235,7 @@ export const meetings: Meeting[] = [
     duration: 30,
     preMeetingBrief: `**Sarah Chen — LuminAI**\n\n**Company:** AI-powered document processing. Series A, $12M raised. 15 engineers.\n\n**Relationship:** Pilot customer since 2 weeks ago. Very engaged — used product daily.\n\n**Last interaction:** Demo call where we walked through advanced features.\n\n**Key topics to cover:**\n- Pilot feedback & usage metrics\n- Enterprise pricing discussion\n- Timeline for decision\n\n**Notes:** Sarah mentioned budget approval needs to go through their board. Next board meeting is end of month.`,
     userNotes: "",
+    irrelevant: false,
   },
   {
     id: "m2",
@@ -244,6 +245,7 @@ export const meetings: Meeting[] = [
     duration: 45,
     preMeetingBrief: `**Amara Osei — BrightPath**\n\n**Company:** EdTech platform. Series B, 200 employees. Recently expanded to EU.\n\n**Relationship:** Met through investor intro. First meeting went very well.\n\n**Bringing:** Their CTO, Kwame Mensah, for technical evaluation.\n\n**Key topics to cover:**\n- Architecture overview & security model\n- Integration with their existing stack (React, Node, AWS)\n- Data residency requirements (EU)\n\n**Notes:** High potential deal. They have budget and urgency — current solution contract expires in 6 weeks.`,
     userNotes: "",
+    irrelevant: false,
   },
   {
     id: "m3",
@@ -253,6 +255,7 @@ export const meetings: Meeting[] = [
     duration: 30,
     preMeetingBrief: `**Elena Rodriguez — DataWeave**\n\n**Company:** Data integration platform. Seed stage, 8-person team.\n\n**Relationship:** Met at AI conference. Good rapport.\n\n**Key topics to cover:**\n- Address questions from conference chat\n- Understand their data pipeline challenges\n- Discuss potential pilot structure\n\n**Notes:** Budget cycle is Q2 — this is a longer play. Keep warm without heavy pressure.`,
     userNotes: "",
+    irrelevant: false,
   },
   {
     id: "m4",
@@ -263,6 +266,7 @@ export const meetings: Meeting[] = [
     granolaNote: `## Meeting Summary\n\nQuarterly review with James Park (CTO) and their team leads. Overall very positive.\n\n**Key points:**\n- Usage up 40% quarter-over-quarter\n- Team satisfaction score: 8.7/10\n- Want to expand to design team (15 additional seats)\n- Requested custom reporting feature\n\n**Action items:**\n- Send proposal for additional seats by Friday\n- Schedule call with their design lead\n- Add reporting feature to roadmap discussion\n\n## Transcript\n\n[Full transcript available in Granola]`,
     preMeetingBrief: "Quarterly review with existing customer. Focus on retention and expansion.",
     userNotes: "Great meeting. James is a strong champion. Expansion opportunity is real.",
+    irrelevant: false,
   },
   {
     id: "m5",
@@ -273,6 +277,7 @@ export const meetings: Meeting[] = [
     granolaNote: `## Meeting Summary\n\nDemo for Marcus Johnson and two of his senior engineers.\n\n**Key points:**\n- Impressed by the API-first approach\n- Concerns about migration from current tooling\n- Wants to see documentation and SDK examples\n- Budget: ~$500/mo for 20 seats\n\n**Action items:**\n- Share API docs and SDK quickstart guide\n- Prepare migration guide from their current tool\n- Follow up in 1 week\n\n## Transcript\n\n[Full transcript available in Granola]`,
     preMeetingBrief: "First demo with StackFlow. Marcus is VP Eng — decision maker.",
     userNotes: "Good demo. Engineers were engaged. Marcus is cautious but interested. Key blocker is migration effort.",
+    irrelevant: false,
   },
   // Investor meetings
   {
@@ -283,6 +288,7 @@ export const meetings: Meeting[] = [
     duration: 60,
     preMeetingBrief: `**Michelle Tan — Sequoia Capital**\n\n**Fund:** $8B fund, focused on enterprise SaaS and developer tools.\n\n**Relationship:** Pitched at partner meeting last week. Strong interest.\n\n**Key topics to cover:**\n- Q2 growth metrics and projections\n- Customer expansion stories\n- Use of funds / hiring plan\n\n**Notes:** Michelle is our champion at the firm. Need to give her ammo for the Monday partner meeting.`,
     userNotes: "",
+    irrelevant: false,
   },
 ];
 
