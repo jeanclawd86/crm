@@ -273,18 +273,18 @@ export function ContactDetail({
                 </div>
               )}
               {/* Quick context from enrichment */}
-              {(contact.personSummary || contact.companyDescription) && (
+              {(localContact.personSummary || localContact.companyDescription) && (
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-blue-500/20">
-                  {contact.personSummary && (
+                  {localContact.personSummary && (
                     <div>
-                      <p className="text-xs font-medium text-blue-400 mb-1">About {contact.name.split(" ")[0]}</p>
-                      <p className="text-xs text-muted-foreground">{contact.personSummary}</p>
+                      <p className="text-xs font-medium text-blue-400 mb-1">About {localContact.name.split(" ")[0]}</p>
+                      <InlineEdit value={localContact.personSummary || ""} onSave={(v) => patchField("personSummary", v)} className="text-xs text-muted-foreground" placeholder="Add background" multiline />
                     </div>
                   )}
-                  {contact.companyDescription && (
+                  {localContact.companyDescription && (
                     <div>
-                      <p className="text-xs font-medium text-blue-400 mb-1">About {contact.company}</p>
-                      <p className="text-xs text-muted-foreground">{contact.companyDescription}</p>
+                      <p className="text-xs font-medium text-blue-400 mb-1">About {localContact.company}</p>
+                      <InlineEdit value={localContact.companyDescription || ""} onSave={(v) => patchField("companyDescription", v)} className="text-xs text-muted-foreground" placeholder="Add company description" multiline />
                     </div>
                   )}
                 </div>
@@ -345,24 +345,20 @@ export function ContactDetail({
                 <Separator />
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Pilot Opportunities</p>
-                  <InlineEdit value={localContact.pilotOpportunities || ""} onSave={(v) => patchField("pilotOpportunities", v)} className="text-sm" placeholder="Potential pilot opportunities identified" multiline />
+                  <InlineEdit value={localContact.pilotOpportunities || ""} onSave={(v) => patchField("pilotOpportunities", v)} className="text-sm whitespace-pre-line" placeholder="Potential pilot opportunities identified" multiline />
                 </div>
                 <Separator />
                 <div>
                   <p className="text-xs text-muted-foreground mb-1">Meeting Insights</p>
                   <div className="max-h-48 overflow-y-auto">
-                    <InlineEdit value={localContact.meetingInsights || ""} onSave={(v) => patchField("meetingInsights", v)} className="text-sm" placeholder="Cumulative insights from meetings" multiline />
+                    <InlineEdit value={localContact.meetingInsights || ""} onSave={(v) => patchField("meetingInsights", v)} className="text-sm whitespace-pre-line" placeholder="Cumulative insights from meetings" multiline />
                   </div>
                 </div>
-                {localContact.suggestedNextSteps && (
-                  <>
-                    <Separator />
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Suggested Next Steps</p>
-                      <div className="text-sm whitespace-pre-line">{localContact.suggestedNextSteps}</div>
-                    </div>
-                  </>
-                )}
+                <Separator />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Suggested Next Steps</p>
+                  <InlineEdit value={localContact.suggestedNextSteps || ""} onSave={(v) => patchField("suggestedNextSteps", v)} className="text-sm whitespace-pre-line" placeholder="Suggested next steps for this contact" multiline />
+                </div>
               </div>
             </CardContent>
           </Card>
