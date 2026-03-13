@@ -16,6 +16,7 @@ function rowToContact(row: Record<string, unknown>): Contact {
     source: row.source as string,
     notes: row.notes as string,
     avatarUrl: (row.avatar_url as string) || undefined,
+    archived: row.archived === true,
     createdAt: String(row.created_at),
     linkedinUrl: (row.linkedin_url as string) || undefined,
     location: (row.location as string) || undefined,
@@ -205,7 +206,7 @@ export async function createContact(data: Omit<Contact, "id" | "createdAt">): Pr
   return rowToContact(rows[0]);
 }
 
-type ContactUpdateFields = Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes" | "linkedinUrl" | "location" | "personSummary" | "companyDescription" | "companySize" | "companyIndustry" | "companyType" | "companyLocation" | "companyFunding">>;
+type ContactUpdateFields = Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes" | "archived" | "linkedinUrl" | "location" | "personSummary" | "companyDescription" | "companySize" | "companyIndustry" | "companyType" | "companyLocation" | "companyFunding">>;
 
 export async function updateContact(id: string, data: ContactUpdateFields): Promise<Contact | undefined> {
   const current = await getContact(id);
@@ -218,6 +219,7 @@ export async function updateContact(id: string, data: ContactUpdateFields): Prom
   const nextFollowUp = data.nextFollowUp !== undefined ? data.nextFollowUp : current.nextFollowUp;
   const source = data.source ?? current.source;
   const notes = data.notes ?? current.notes;
+  const archived = data.archived !== undefined ? data.archived : current.archived;
   const linkedinUrl = data.linkedinUrl !== undefined ? data.linkedinUrl : (current.linkedinUrl ?? null);
   const location = data.location !== undefined ? data.location : (current.location ?? null);
   const personSummary = data.personSummary !== undefined ? data.personSummary : (current.personSummary ?? null);
@@ -230,7 +232,7 @@ export async function updateContact(id: string, data: ContactUpdateFields): Prom
   const { rows } = await sql`
     UPDATE contacts
     SET name = ${name}, email = ${email}, company = ${company}, role = ${role},
-        stage = ${stage}, next_follow_up = ${nextFollowUp}, source = ${source}, notes = ${notes},
+        stage = ${stage}, next_follow_up = ${nextFollowUp}, source = ${source}, notes = ${notes}, archived = ${archived},
         linkedin_url = ${linkedinUrl}, location = ${location}, person_summary = ${personSummary},
         company_description = ${companyDescription}, company_size = ${companySize}, company_industry = ${companyIndustry},
         company_type = ${companyType}, company_location = ${companyLocation}, company_funding = ${companyFunding}

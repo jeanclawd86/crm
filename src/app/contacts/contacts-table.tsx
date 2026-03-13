@@ -6,8 +6,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 import { stageColors } from "@/lib/stage-colors";
 import { Contact, ContactMode, PipelineStage, getStagesForMode, getModeLabel } from "@/lib/types";
+
+type ArchiveFilter = "active" | "archived" | "all";
 
 export function ContactsTable({
   contacts,
@@ -24,6 +37,7 @@ export function ContactsTable({
   const [stageFilter, setStageFilter] = useState<PipelineStage | "All">(
     (initialStage as PipelineStage) || "All"
   );
+  const [archiveFilter, setArchiveFilter] = useState<ArchiveFilter>("active");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState(false);
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Partial<Contact>>>(new Map());
@@ -64,9 +78,13 @@ export function ContactsTable({
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.company.toLowerCase().includes(search.toLowerCase());
       const matchesStage = stageFilter === "All" || c.stage === stageFilter;
-      return matchesSearch && matchesStage;
+      const matchesArchive =
+        archiveFilter === "all" ||
+        (archiveFilter === "active" && !c.archived) ||
+        (archiveFilter === "archived" && c.archived);
+      return matchesSearch && matchesStage && matchesArchive;
     });
-  }, [contactsWithOptimistic, search, stageFilter]);
+  }, [contactsWithOptimistic, search, stageFilter, archiveFilter]);
 
   const allSelected = filtered.length > 0 && filtered.every((c) => selected.has(c.id));
 
@@ -136,6 +154,19 @@ export function ContactsTable({
     }
   }
 
+  async function bulkArchive() {
+    setBulkAction(true);
+    const ids = Array.from(selected);
+    ids.forEach((id) => applyOptimistic(id, { archived: true }));
+    try {
+      await Promise.all(ids.map((id) => patchContact(id, { archived: true })));
+      setSelected(new Set());
+      router.refresh();
+    } finally {
+      setBulkAction(false);
+    }
+  }
+
   async function bulkEnrich() {
     const ids = Array.from(selected);
     setEnrichProgress({ current: 0, total: ids.length });
@@ -161,6 +192,18 @@ export function ContactsTable({
   async function quickSetFollowUp(contactId: string, date: string) {
     applyOptimistic(contactId, { nextFollowUp: date });
     await patchContact(contactId, { nextFollowUp: date });
+    router.refresh();
+  }
+
+  async function quickSetStage(contactId: string, stage: PipelineStage) {
+    applyOptimistic(contactId, { stage });
+    await patchContact(contactId, { stage });
+    router.refresh();
+  }
+
+  async function quickArchive(contactId: string) {
+    applyOptimistic(contactId, { archived: true });
+    await patchContact(contactId, { archived: true });
     router.refresh();
   }
 
@@ -207,6 +250,13 @@ export function ContactsTable({
               Pass All
             </button>
             <button
+              disabled={bulkAction}
+              onClick={bulkArchive}
+              className="text-sm px-3 py-1 rounded-md border border-input bg-background hover:bg-destructive hover:text-destructive-foreground transition-colors"
+            >
+              Archive All
+            </button>
+            <button
               disabled={bulkAction || enrichProgress !== null}
               onClick={bulkEnrich}
               className="text-sm px-3 py-1 rounded-md border border-input bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
@@ -242,6 +292,15 @@ export function ContactsTable({
               {stages.map((stage) => (
                 <option key={stage} value={stage}>{stage}</option>
               ))}
+            </select>
+            <select
+              value={archiveFilter}
+              onChange={(e) => setArchiveFilter(e.target.value as ArchiveFilter)}
+              className="h-9 text-sm px-3 pr-8 rounded-md border border-input bg-background"
+            >
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="all">Show All</option>
             </select>
             <div className="flex gap-1 ml-auto flex-wrap">
               {stages.map((stage) => (
@@ -282,7 +341,7 @@ export function ContactsTable({
             </thead>
             <tbody>
               {filtered.map((contact) => (
-                <tr key={contact.id} className="border-t border-border hover:bg-accent/50 transition-colors">
+                <tr key={contact.id} className={`border-t border-border hover:bg-accent/50 transition-colors ${contact.archived ? "opacity-60" : ""}`}>
                   <td className="px-4 py-3">
                     <input
                       type="checkbox"
@@ -299,7 +358,10 @@ export function ContactsTable({
                         </span>
                       </div>
                       <div>
-                        <p className="text-sm font-medium hover:underline">{contact.name}</p>
+                        <p className="text-sm font-medium hover:underline">
+                          {contact.name}
+                          {contact.archived && <span className="ml-1.5 text-xs text-muted-foreground">(archived)</span>}
+                        </p>
                         <p className="text-xs text-muted-foreground">{contact.role}</p>
                       </div>
                     </Link>
@@ -321,15 +383,65 @@ export function ContactsTable({
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{contact.source}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => quickPass(contact.id)}
-                        className="text-xs px-2 py-1 rounded-md border border-input bg-background hover:bg-destructive hover:text-destructive-foreground transition-colors"
-                        title="Pass"
-                      >
-                        Pass
-                      </button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground transition-colors text-sm">
+                        &#8942;
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                        {getStagesForMode(mode).length > 0 && (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>Set Stage</DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                              {getStagesForMode(mode).map((stage) => (
+                                <DropdownMenuItem
+                                  key={stage}
+                                  onClick={() => quickSetStage(contact.id, stage)}
+                                >
+                                  <Badge className={`${stageColors[stage]} mr-1.5`} variant="secondary">
+                                    {stage}
+                                  </Badge>
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        )}
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>Set Follow-up</DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent>
+                            <div className="p-2">
+                              <input
+                                type="date"
+                                defaultValue={contact.nextFollowUp || ""}
+                                onChange={(e) => {
+                                  if (e.target.value) quickSetFollowUp(contact.id, e.target.value);
+                                }}
+                                className="text-sm px-2 py-1 rounded-md border border-input bg-background w-full"
+                              />
+                            </div>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        <DropdownMenuSeparator />
+                        {!contact.archived && (
+                          <DropdownMenuItem onClick={() => quickArchive(contact.id)}>
+                            Archive
+                          </DropdownMenuItem>
+                        )}
+                        {contact.archived && (
+                          <DropdownMenuItem onClick={() => {
+                            applyOptimistic(contact.id, { archived: false });
+                            patchContact(contact.id, { archived: false }).then(() => router.refresh());
+                          }}>
+                            Unarchive
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => quickPass(contact.id)}
+                        >
+                          Pass
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -347,4 +459,3 @@ export function ContactsTable({
     </div>
   );
 }
-

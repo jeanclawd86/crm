@@ -42,6 +42,7 @@ export interface Contact {
   source: string;
   notes: string;
   avatarUrl?: string;
+  archived: boolean;
   createdAt: string;
   // Enrichment fields
   linkedinUrl?: string;

@@ -24,6 +24,7 @@ export const contacts: Contact[] = [
     nextFollowUp: todayStr,
     source: "YC Demo Day",
     notes: "Running a 2-week pilot. Very engaged, asked about enterprise pricing. Team of 15 engineers.",
+    archived: false,
     createdAt: twoWeeksAgo,
   },
   {
@@ -37,6 +38,7 @@ export const contacts: Contact[] = [
     nextFollowUp: todayStr,
     source: "LinkedIn outreach",
     notes: "Interested in developer productivity angle. Wants to see API docs before committing.",
+    archived: false,
     createdAt: oneWeekAgo,
   },
   {
@@ -50,6 +52,7 @@ export const contacts: Contact[] = [
     nextFollowUp: tomorrow,
     source: "Warm intro from Alex K.",
     notes: "Met at the AI conference. Strong interest but budget cycle is Q2.",
+    archived: false,
     createdAt: threeDaysAgo,
   },
   {
@@ -63,6 +66,7 @@ export const contacts: Contact[] = [
     nextFollowUp: nextWeek,
     source: "Inbound — website",
     notes: "Signed annual contract. Using for their entire eng team (40 seats). Very happy.",
+    archived: false,
     createdAt: twoWeeksAgo,
   },
   {
@@ -76,6 +80,7 @@ export const contacts: Contact[] = [
     nextFollowUp: tomorrow,
     source: "Conference — AI Summit",
     notes: "Early-stage startup. Interesting use case in healthcare. Worth exploring.",
+    archived: false,
     createdAt: twoDaysAgo,
   },
   {
@@ -89,6 +94,7 @@ export const contacts: Contact[] = [
     nextFollowUp: yesterday,
     source: "Referral from James Park",
     notes: "Evaluating multiple solutions. Price-sensitive. Needs SSO.",
+    archived: false,
     createdAt: oneWeekAgo,
   },
   {
@@ -102,6 +108,7 @@ export const contacts: Contact[] = [
     nextFollowUp: null,
     source: "Cold outreach",
     notes: "Not a fit right now — they just signed a 2-year deal with competitor. Revisit in 18 months.",
+    archived: false,
     createdAt: twoWeeksAgo,
   },
   {
@@ -115,6 +122,7 @@ export const contacts: Contact[] = [
     nextFollowUp: nextWeek,
     source: "Twitter DM",
     notes: "Saw our launch tweet. Wants a demo. B2B SaaS in fintech space.",
+    archived: false,
     createdAt: yesterday,
   },
   {
@@ -128,6 +136,7 @@ export const contacts: Contact[] = [
     nextFollowUp: todayStr,
     source: "Warm intro from investor",
     notes: "Great first meeting. Aligned on vision. Wants to bring in their CTO for technical deep-dive.",
+    archived: false,
     createdAt: threeDaysAgo,
   },
   {
@@ -141,6 +150,7 @@ export const contacts: Contact[] = [
     nextFollowUp: tomorrow,
     source: "YC batch mate",
     notes: "Started pilot last week. 8-person team. Good early signals on adoption.",
+    archived: false,
     createdAt: oneWeekAgo,
   },
   // Investors
@@ -155,6 +165,7 @@ export const contacts: Contact[] = [
     nextFollowUp: todayStr,
     source: "YC intro",
     notes: "Pitched at partner meeting. Strong interest. Wants to see Q2 metrics before moving to DD.",
+    archived: false,
     createdAt: oneWeekAgo,
   },
   {
@@ -168,6 +179,7 @@ export const contacts: Contact[] = [
     nextFollowUp: tomorrow,
     source: "Existing investor intro",
     notes: "Got warm intro through our seed investor. Meeting scheduled for next week.",
+    archived: false,
     createdAt: threeDaysAgo,
   },
   {
@@ -181,6 +193,7 @@ export const contacts: Contact[] = [
     nextFollowUp: todayStr,
     source: "Conference",
     notes: "Deep in DD. Requested customer references and financial model. Very thorough process.",
+    archived: false,
     createdAt: twoWeeksAgo,
   },
   {
@@ -194,6 +207,7 @@ export const contacts: Contact[] = [
     nextFollowUp: nextWeek,
     source: "Cold outreach",
     notes: "Early research phase. Need to understand their thesis on developer tools.",
+    archived: false,
     createdAt: yesterday,
   },
   {
@@ -207,6 +221,7 @@ export const contacts: Contact[] = [
     nextFollowUp: null,
     source: "YC Demo Day",
     notes: "Passed — didn't align with their current fund thesis. Good relationship though, keep warm.",
+    archived: false,
     createdAt: twoWeeksAgo,
   },
 ];

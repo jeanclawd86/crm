@@ -68,6 +68,7 @@ export async function POST(req: NextRequest) {
           companyType: c.companyType,
           companyLocation: c.companyLocation,
           companyFunding: c.companyFunding,
+          archived: false,
         });
 
         await createActivity({

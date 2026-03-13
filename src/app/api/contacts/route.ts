@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       nextFollowUp: nextFollowUp || null,
       source: source || "",
       notes: notes || "",
+      archived: false,
     });
 
     return NextResponse.json(contact, { status: 201 });

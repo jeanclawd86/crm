@@ -40,7 +40,10 @@ export async function POST() {
     await sql`CREATE INDEX IF NOT EXISTS idx_emails_contact_id ON emails(contact_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id)`;
 
-    return NextResponse.json({ success: true, message: "Migration complete: all enrichment, transcript, and email columns added" });
+    // Archive support
+    await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT FALSE`;
+
+    return NextResponse.json({ success: true, message: "Migration complete: all enrichment, transcript, email, and archive columns added" });
   } catch (error) {
     console.error("Migration error:", error);
     return NextResponse.json(
