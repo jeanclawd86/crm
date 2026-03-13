@@ -261,38 +261,70 @@ export async function POST(
   }
 
   try {
-    // Search for person
-    const personQuery = encodeURIComponent(`${contact.name} ${contact.company} ${contact.role}`);
-    const personRes = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?q=${personQuery}&count=10`,
-      { headers: { "X-Subscription-Token": braveApiKey, Accept: "application/json" } }
-    );
-    const personData: BraveSearchResponse = await personRes.json();
-    const personResults = personData.web?.results || [];
+    const braveSearch = async (query: string, count = 5): Promise<BraveWebResult[]> => {
+      const res = await fetch(
+        `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`,
+        { headers: { "X-Subscription-Token": braveApiKey, Accept: "application/json" } }
+      );
+      const data: BraveSearchResponse = await res.json();
+      return data.web?.results || [];
+    };
 
-    // Search for company
-    const companyQuery = encodeURIComponent(`${contact.company} company`);
-    const companyRes = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?q=${companyQuery}&count=10`,
-      { headers: { "X-Subscription-Token": braveApiKey, Accept: "application/json" } }
-    );
-    const companyData: BraveSearchResponse = await companyRes.json();
-    const companyResults = companyData.web?.results || [];
+    const companyName = contact.company && contact.company !== "Unknown" ? contact.company : "";
+    const firstName = contact.name.split(" ")[0];
 
-    const allResults = [...personResults, ...companyResults];
+    // Multi-query strategy: 4 targeted searches in parallel
+    const [personResults, careerResults, companyResults, pressResults] = await Promise.all([
+      // Q1: Person + role background (non-LinkedIn sources preferred)
+      braveSearch(`"${contact.name}" ${companyName} background OR career OR experience`, 8),
+      // Q2: Career history from data aggregators
+      braveSearch(`"${contact.name}" site:adapt.io OR site:crunchbase.com OR site:zoominfo.com OR site:apollo.io`, 5),
+      // Q3: Company info from quality sources
+      companyName
+        ? braveSearch(`"${companyName}" company funding OR about OR founded site:crunchbase.com OR site:pitchbook.com`, 5)
+        : Promise.resolve([]),
+      // Q4: Company general info
+      companyName
+        ? braveSearch(`"${companyName}" company`, 5)
+        : Promise.resolve([]),
+    ]);
+
+    const allResults = [...personResults, ...careerResults, ...companyResults, ...pressResults];
+    const allCompanyResults = [...companyResults, ...pressResults];
     const allText = allResults.map((r) => `${r.title} ${r.description}`).join(" ");
 
-    // Build person bio from top results mentioning the person's name
-    // Filter out LinkedIn results — they're always garbage snippets
-    const nonLinkedInResults = personResults.filter(
+    // Build person bio — prefer non-LinkedIn sources, then career data sites
+    const nonLinkedInResults = [...personResults, ...careerResults].filter(
       (r) => !r.url.includes("linkedin.com")
     );
-    const personBioResults = (nonLinkedInResults.length > 0 ? nonLinkedInResults : personResults).filter(
-      (r) => r.description.toLowerCase().includes(contact.name.split(" ")[0].toLowerCase())
+    const bioSources = nonLinkedInResults.length > 0 ? nonLinkedInResults : personResults;
+    const personBioResults = bioSources.filter(
+      (r) => r.description.toLowerCase().includes(firstName.toLowerCase())
     );
-    const personSummary = personBioResults.length > 0
-      ? personBioResults.slice(0, 2).map((r) => r.description).join(" ").slice(0, 500)
-      : extractFromResults(nonLinkedInResults.length > 0 ? nonLinkedInResults : personResults, [contact.name.split(" ")[0]]);
+
+    // Try to extract career history from adapt.io/similar (structured data)
+    const careerDataResults = careerResults.filter(
+      (r) => (r.url.includes("adapt.io") || r.url.includes("zoominfo") || r.url.includes("apollo.io"))
+        && r.description.toLowerCase().includes(firstName.toLowerCase())
+    );
+
+    let personSummary: string | undefined;
+    if (careerDataResults.length > 0) {
+      // Career data sites have the best structured info
+      personSummary = careerDataResults.slice(0, 2).map((r) => r.description).join(" ").slice(0, 600);
+    } else if (personBioResults.length > 0) {
+      personSummary = personBioResults.slice(0, 2).map((r) => r.description).join(" ").slice(0, 600);
+    } else {
+      personSummary = extractFromResults(bioSources, [firstName]);
+    }
+
+    // Try to infer company from results if unknown
+    let inferredCompany = companyName;
+    if (!inferredCompany) {
+      // Look for company mentions in career data
+      const companyMatch = allText.match(new RegExp(`${firstName}[^.]*?(?:at|Head of Product at|VP at|Director at|CPO at)\\s+([A-Z][\\w]+(?:\\s+[A-Z][\\w]+)?)`, 'i'));
+      if (companyMatch) inferredCompany = companyMatch[1];
+    }
 
     const clean = (v: string | undefined) => v ? cleanText(v) || undefined : undefined;
 
@@ -300,18 +332,23 @@ export async function POST(
     const meetings = await getContactMeetings(id);
     const suggestedNextSteps = generateNextSteps(contact.stage as PipelineStage, contact.mode || "prospect", meetings.length, contact);
 
-    const enrichment = {
+    const enrichment: Record<string, string | undefined> = {
       suggestedNextSteps,
       linkedinUrl: contact.linkedinUrl || extractLinkedIn(allResults),
       location: contact.location || clean(extractLocation(allText)),
       personSummary: contact.personSummary || clean(personSummary),
-      companyDescription: contact.companyDescription || clean(extractFromResults(companyResults, [contact.company])),
+      companyDescription: contact.companyDescription || clean(extractFromResults(allCompanyResults, [inferredCompany || contact.company])),
       companySize: contact.companySize || inferCompanySize(allText),
       companyIndustry: contact.companyIndustry || inferIndustry(allText),
       companyType: contact.companyType || inferCompanyType(allText),
-      companyLocation: contact.companyLocation || clean(extractLocation(companyResults.map((r) => r.description).join(" "))),
+      companyLocation: contact.companyLocation || clean(extractLocation(allCompanyResults.map((r) => r.description).join(" "))),
       companyFunding: contact.companyFunding || extractFunding(allText),
     };
+
+    // Auto-fill company if it was unknown
+    if ((!contact.company || contact.company === "Unknown") && inferredCompany) {
+      enrichment.company = inferredCompany;
+    }
 
     const updated = await updateContact(id, enrichment);
     return NextResponse.json(updated);
