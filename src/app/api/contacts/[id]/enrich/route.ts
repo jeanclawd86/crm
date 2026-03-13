@@ -130,55 +130,65 @@ function findCompanyUrl(results: BraveWebResult[], companyName: string): string 
   return undefined;
 }
 
-// ─── People Data Labs enrichment ───
+// ─── People Data Labs enrichment (with key failover) ───
+async function pdlRequest(params: URLSearchParams, apiKey: string): Promise<{ status: number; data?: PDLPerson; error?: string }> {
+  const res = await fetch(`https://api.peopledatalabs.com/v5/person/enrich?${params}`, {
+    headers: { "X-Api-Key": apiKey },
+  });
+  return res.json();
+}
+
 async function enrichWithPDL(name: string, company: string, linkedinUrl?: string): Promise<{ person: PDLPerson | null; raw: string }> {
-  const pdlKey = process.env.PDL_API_KEY;
-  if (!pdlKey) return { person: null, raw: "" };
+  const keys = [process.env.PDL_API_KEY, process.env.PDL_API_KEY_2].filter(Boolean) as string[];
+  if (keys.length === 0) return { person: null, raw: "" };
 
-  try {
-    const params = new URLSearchParams({ pretty: "true" });
-    if (linkedinUrl) {
-      // LinkedIn URL is the most reliable match
-      params.set("profile", linkedinUrl);
+  const params = new URLSearchParams({ pretty: "true" });
+  if (linkedinUrl) {
+    params.set("profile", linkedinUrl);
+  } else {
+    const nameParts = name.split(" ");
+    if (nameParts.length >= 2) {
+      params.set("first_name", nameParts[0]);
+      params.set("last_name", nameParts.slice(1).join(" "));
     } else {
-      const nameParts = name.split(" ");
-      if (nameParts.length >= 2) {
-        params.set("first_name", nameParts[0]);
-        params.set("last_name", nameParts.slice(1).join(" "));
-      } else {
-        params.set("name", name);
-      }
-      if (company && company !== "Unknown") {
-        params.set("company", company);
-      }
+      params.set("name", name);
     }
-
-    const res = await fetch(`https://api.peopledatalabs.com/v5/person/enrich?${params}`, {
-      headers: { "X-Api-Key": pdlKey },
-    });
-    const data = await res.json();
-
-    if (data.status === 200 && data.data) {
-      const p: PDLPerson = data.data;
-      // Format experience into readable text for Claude
-      const expText = (p.experience || []).map((e: PDLExperience) => {
-        const title = typeof e.title === "object" ? e.title?.name : e.title;
-        const companyName = e.company?.name || "Unknown";
-        const start = e.start_date || "?";
-        const end = e.end_date || "present";
-        return `• ${companyName} — ${title || "Unknown role"} (${start} → ${end})`;
-      }).join("\n");
-
-      return {
-        person: p,
-        raw: `PDL PROFILE DATA:\nName: ${p.full_name}\nCurrent Title: ${p.job_title}\nCurrent Company: ${p.job_company_name}\nLinkedIn: ${p.linkedin_url}\nLocation: ${p.location_name}\n\nWORK HISTORY:\n${expText}`,
-      };
+    if (company && company !== "Unknown") {
+      params.set("company", company);
     }
-    return { person: null, raw: "" };
-  } catch (e) {
-    console.error("PDL enrichment error:", e);
-    return { person: null, raw: "" };
   }
+
+  for (const key of keys) {
+    try {
+      const data = await pdlRequest(params, key);
+      // 402 = payment required (credits exhausted), try next key
+      if (data.status === 402 || data.error?.includes("credit")) {
+        console.log("PDL key exhausted, trying next...");
+        continue;
+      }
+      if (data.status === 200 && data.data) {
+        const p: PDLPerson = data.data;
+        const expText = (p.experience || []).map((e: PDLExperience) => {
+          const title = typeof e.title === "object" ? e.title?.name : e.title;
+          const companyName = e.company?.name || "Unknown";
+          const start = e.start_date || "?";
+          const end = e.end_date || "present";
+          return `• ${companyName} — ${title || "Unknown role"} (${start} → ${end})`;
+        }).join("\n");
+
+        return {
+          person: p,
+          raw: `PDL PROFILE DATA:\nName: ${p.full_name}\nCurrent Title: ${p.job_title}\nCurrent Company: ${p.job_company_name}\nLinkedIn: ${p.linkedin_url}\nLocation: ${p.location_name}\n\nWORK HISTORY:\n${expText}`,
+        };
+      }
+      // 404 or no match — don't try next key, person just isn't found
+      return { person: null, raw: "" };
+    } catch (e) {
+      console.error("PDL enrichment error:", e);
+      continue;
+    }
+  }
+  return { person: null, raw: "" };
 }
 
 // ─── Apollo Organization enrichment ───
