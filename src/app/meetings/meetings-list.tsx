@@ -5,6 +5,12 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { MeetingWithContact } from "@/lib/types";
 import { stageColors } from "@/lib/stage-colors";
 
@@ -31,12 +37,16 @@ export function MeetingsList({ meetings: initialMeetings }: { meetings: MeetingW
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold tracking-tight">Meetings</h1>
           {meetings.some((m) => m.irrelevant) && (
-            <button
-              onClick={() => setHideIrrelevant(!hideIrrelevant)}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {hideIrrelevant ? "Show irrelevant" : "Hide irrelevant"}
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors text-muted-foreground">
+                &#8942;
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setHideIrrelevant(!hideIrrelevant)}>
+                  {hideIrrelevant ? "Show irrelevant" : "Hide irrelevant"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
         <p className="text-sm text-muted-foreground mt-1">

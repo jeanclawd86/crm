@@ -1,6 +1,12 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -344,12 +350,16 @@ export function ContactDetail({
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-medium">Meeting History</CardTitle>
                 {meetings.some((m) => m.irrelevant) && (
-                  <button
-                    onClick={() => setHideIrrelevantMeetings(!hideIrrelevantMeetings)}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {hideIrrelevantMeetings ? "Show irrelevant" : "Hide irrelevant"}
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent hover:text-accent-foreground transition-colors text-muted-foreground">
+                      &#8942;
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setHideIrrelevantMeetings(!hideIrrelevantMeetings)}>
+                        {hideIrrelevantMeetings ? "Show irrelevant" : "Hide irrelevant"}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             </CardHeader>
