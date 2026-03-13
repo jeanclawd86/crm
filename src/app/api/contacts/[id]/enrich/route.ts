@@ -15,7 +15,7 @@ interface BraveSearchResponse {
   };
 }
 
-/** Strip HTML tags, decode entities, and remove LinkedIn/scraper boilerplate */
+/** Strip HTML tags, decode entities, remove LinkedIn/scraper boilerplate, and trim truncated fragments */
 function cleanText(raw: string): string {
   let text = raw
     // Decode common HTML entities
@@ -28,21 +28,36 @@ function cleanText(raw: string): string {
     .replace(/&#\d+;/g, "")
     // Strip HTML tags
     .replace(/<[^>]+>/g, "")
-    // Remove LinkedIn boilerplate
-    .replace(/\d+ billion members \|[^.]+\./gi, "")
-    .replace(/Manage your professional identity\.[^.]*\./gi, "")
-    .replace(/Build and engage with your professional network\.[^.]*\./gi, "")
-    .replace(/Access knowledge, insights and opportunities\./gi, "")
-    .replace(/View [^']+?'s email address:[^.]*\./gi, "")
-    .replace(/\w+ contact details:[^.]*\./gi, "")
-    .replace(/Email address:\s*\S+/gi, "")
-    .replace(/Phone number:\s*\S+/gi, "")
+    // Remove LinkedIn boilerplate (aggressive)
+    .replace(/\d+\+?\s*(billion|million)\s*members?\s*\|[^.]+\./gi, "")
+    .replace(/Manage your professional identity[^.]*\./gi, "")
+    .replace(/Build and engage with your professional network[^.]*\./gi, "")
+    .replace(/Access knowledge,?\s*insights\s*and\s*opportunities\.?/gi, "")
+    .replace(/View\s+\w+[^']*?'s\s*(email|profile)[^.]*\./gi, "")
+    .replace(/\w+\s*contact details:[^.]*\./gi, "")
+    .replace(/Email\s*address:\s*\S+/gi, "")
+    .replace(/Phone\s*number:\s*\S+/gi, "")
     .replace(/\+1-[\d*-]+/g, "")
+    .replace(/[\w*]+@[\w*.]+/g, "") // redacted emails
+    .replace(/\*{2,}[\d-]*/g, "") // redacted phone numbers like ***-****
+    .replace(/com\s*&\s*phone:/gi, "") // LinkedIn scraping fragment
+    .replace(/'s\s*profile\s*as\b/gi, "") // LinkedIn profile fragment
+    .replace(/located in \w{3,15}$/i, "") // truncated location at end
     // Collapse whitespace
     .replace(/\s{2,}/g, " ")
     .trim();
   // Remove leading pipes/separators
   text = text.replace(/^\s*\|\s*/, "").trim();
+  // Trim to last complete sentence (remove trailing truncated fragments)
+  const sentences = text.match(/[^.!?]+[.!?]/g);
+  if (sentences && sentences.length > 0) {
+    const complete = sentences.join("").trim();
+    if (complete.length > 20) {
+      text = complete;
+    }
+  }
+  // If result is too short or garbage, return empty
+  if (text.length < 15) return "";
   return text;
 }
 
@@ -268,12 +283,16 @@ export async function POST(
     const allText = allResults.map((r) => `${r.title} ${r.description}`).join(" ");
 
     // Build person bio from top results mentioning the person's name
-    const personBioResults = personResults.filter(
+    // Filter out LinkedIn results — they're always garbage snippets
+    const nonLinkedInResults = personResults.filter(
+      (r) => !r.url.includes("linkedin.com")
+    );
+    const personBioResults = (nonLinkedInResults.length > 0 ? nonLinkedInResults : personResults).filter(
       (r) => r.description.toLowerCase().includes(contact.name.split(" ")[0].toLowerCase())
     );
     const personSummary = personBioResults.length > 0
       ? personBioResults.slice(0, 2).map((r) => r.description).join(" ").slice(0, 500)
-      : extractFromResults(personResults, [contact.name.split(" ")[0]]);
+      : extractFromResults(nonLinkedInResults.length > 0 ? nonLinkedInResults : personResults, [contact.name.split(" ")[0]]);
 
     const clean = (v: string | undefined) => v ? cleanText(v) || undefined : undefined;
 
