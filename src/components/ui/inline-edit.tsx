@@ -43,6 +43,8 @@ export function InlineEdit({
     setSaving(true);
     try {
       await onSave(trimmed);
+      // Keep the new text — don't revert
+      setText(trimmed);
       setEditing(false);
     } catch {
       setText(value);
@@ -95,10 +97,10 @@ export function InlineEdit({
   return (
     <span
       onClick={() => setEditing(true)}
-      className={`cursor-pointer hover:underline hover:decoration-dotted hover:decoration-muted-foreground/50 ${multiline ? "block whitespace-pre-line" : "inline-block"} ${className} ${!value ? "text-muted-foreground italic" : ""}`}
+      className={`cursor-pointer hover:underline hover:decoration-dotted hover:decoration-muted-foreground/50 ${multiline ? "block whitespace-pre-line" : "inline-block"} ${className} ${!text ? "text-muted-foreground italic" : ""}`}
       title="Click to edit"
     >
-      {value || placeholder}
+      {text || placeholder}
     </span>
   );
 }
