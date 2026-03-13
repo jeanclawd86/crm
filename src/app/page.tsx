@@ -48,19 +48,24 @@ export default async function DashboardPage({
 
       {/* Pipeline Summary */}
       {stages.length > 0 && (
-        <div className="grid gap-3 mb-8" style={{ gridTemplateColumns: `repeat(${Math.min(stages.length, 8)}, minmax(0, 1fr))` }}>
+        <div className="grid gap-3 mb-8" style={{ gridTemplateColumns: `repeat(${Math.min(stages.length, 10)}, minmax(0, 1fr))` }}>
           {orderedCounts.map(({ stage, count }) => (
-            <Card key={stage} size="sm">
-              <CardContent className="pt-3 pb-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <div
-                    className={`h-2 w-2 rounded-full ${stageDotColors[stage]}`}
-                  />
-                  <span className="text-xs text-muted-foreground truncate">{stage}</span>
-                </div>
-                <p className="text-2xl font-semibold">{count}</p>
-              </CardContent>
-            </Card>
+            <Link
+              key={stage}
+              href={`/contacts?mode=${mode}&stage=${encodeURIComponent(stage)}`}
+            >
+              <Card size="sm" className="hover:bg-accent/50 transition-colors cursor-pointer">
+                <CardContent className="pt-3 pb-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <div
+                      className={`h-2 w-2 rounded-full ${stageDotColors[stage]}`}
+                    />
+                    <span className="text-xs text-muted-foreground truncate">{stage}</span>
+                  </div>
+                  <p className="text-2xl font-semibold">{count}</p>
+                </CardContent>
+              </Card>
+            </Link>
           ))}
         </div>
       )}

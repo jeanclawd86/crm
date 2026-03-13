@@ -1,11 +1,11 @@
 export type ContactMode = "prospect" | "investor" | "advisor";
 
-export type ProspectStage = "Lead" | "Intro" | "Met" | "Follow-up" | "Pilot" | "Customer" | "Churned" | "Pass";
+export type ProspectStage = "Lead" | "Intro" | "Met" | "Follow-up" | "Demo Scheduled" | "Pilot Agreed" | "Pilot Active" | "Customer" | "Churned" | "Pass";
 export type InvestorStage = "Researching" | "Warm Intro" | "Met" | "Pitched" | "Due Diligence" | "Term Sheet" | "Committed" | "Passed";
 
 export type PipelineStage = ProspectStage | InvestorStage;
 
-export const PROSPECT_STAGES: ProspectStage[] = ["Lead", "Intro", "Met", "Follow-up", "Pilot", "Customer", "Churned", "Pass"];
+export const PROSPECT_STAGES: ProspectStage[] = ["Lead", "Intro", "Met", "Follow-up", "Demo Scheduled", "Pilot Agreed", "Pilot Active", "Customer", "Churned", "Pass"];
 export const INVESTOR_STAGES: InvestorStage[] = ["Researching", "Warm Intro", "Met", "Pitched", "Due Diligence", "Term Sheet", "Committed", "Passed"];
 
 export function getStagesForMode(mode: ContactMode): PipelineStage[] {
@@ -43,6 +43,16 @@ export interface Contact {
   notes: string;
   avatarUrl?: string;
   createdAt: string;
+  // Enrichment fields
+  linkedinUrl?: string;
+  location?: string;
+  personSummary?: string;
+  companyDescription?: string;
+  companySize?: string;
+  companyIndustry?: string;
+  companyType?: string;
+  companyLocation?: string;
+  companyFunding?: string;
 }
 
 export interface Meeting {
@@ -55,6 +65,9 @@ export interface Meeting {
   granolaNote?: string;
   preMeetingBrief?: string;
   userNotes?: string;
+  granolaId?: string;
+  granolaTranscript?: string;
+  granolaSummary?: string;
 }
 
 export type ActivityType = "meeting" | "email" | "note" | "stage_change" | "follow_up_set";

@@ -64,6 +64,10 @@ export function ContactDetail({
   const [followUp, setFollowUp] = useState(contact.nextFollowUp ?? "");
   const [activities, setActivities] = useState(initialActivities);
   const [saving, setSaving] = useState(false);
+  const [notes, setNotes] = useState(contact.notes);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [expandedMeeting, setExpandedMeeting] = useState<string | null>(null);
+  const [showTranscript, setShowTranscript] = useState<string | null>(null);
 
   async function handleFollowUpChange(newDate: string) {
     setFollowUp(newDate);
@@ -129,33 +133,140 @@ export function ContactDetail({
     }
   }
 
+  async function handleSaveNotes() {
+    setSaving(true);
+    try {
+      await fetch(`/api/contacts/${contact.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes }),
+      });
+      setEditingNotes(false);
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function getMeetingSummaryPreview(meeting: Meeting): string {
+    const text = meeting.granolaSummary || meeting.granolaNote || "";
+    if (!text) return "No summary available";
+    const lines = text.split("\n").filter((l) => l.trim());
+    return lines.slice(0, 2).join(" ").slice(0, 150) + (text.length > 150 ? "..." : "");
+  }
+
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-8 max-w-6xl">
       <Link href={`/contacts?mode=${modeParam}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 inline-block">
         &larr; Contacts
       </Link>
 
       <div className="grid grid-cols-3 gap-6">
-        {/* Main content */}
+        {/* Left column (2/3 width) */}
         <div className="col-span-2 space-y-6">
-          {/* Profile header */}
+          {/* Meeting History */}
           <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-4">
-                <div className="h-14 w-14 rounded-full bg-accent flex items-center justify-center shrink-0">
-                  <span className="text-lg font-semibold">
-                    {contact.name.split(" ").map((n) => n[0]).join("")}
-                  </span>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Meeting History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {contactMeetings.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No meetings yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {contactMeetings.map((meeting) => (
+                    <div key={meeting.id} className="rounded-lg border border-border">
+                      <button
+                        onClick={() => setExpandedMeeting(expandedMeeting === meeting.id ? null : meeting.id)}
+                        className="w-full text-left p-3 hover:bg-accent/50 transition-colors rounded-lg"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{meeting.title}</p>
+                              {(meeting.granolaSummary || meeting.granolaNote) && (
+                                <Badge variant="secondary" className="text-[10px]">Has summary</Badge>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(meeting.dateTime).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                              {" — "}{meeting.duration}min
+                            </p>
+                          </div>
+                          <svg
+                            className={`h-4 w-4 text-muted-foreground transition-transform ${expandedMeeting === meeting.id ? "rotate-180" : ""}`}
+                            fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                          </svg>
+                        </div>
+                        {expandedMeeting !== meeting.id && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                            {getMeetingSummaryPreview(meeting)}
+                          </p>
+                        )}
+                      </button>
+
+                      {expandedMeeting === meeting.id && (
+                        <div className="px-3 pb-3 space-y-3">
+                          <Separator />
+                          {/* AI Summary */}
+                          {(meeting.granolaSummary || meeting.granolaNote) && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">AI Summary</p>
+                              <div className="text-sm whitespace-pre-wrap bg-muted/30 rounded-md p-3">
+                                {meeting.granolaSummary || meeting.granolaNote}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* User Notes */}
+                          {meeting.userNotes && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
+                              <p className="text-sm">{meeting.userNotes}</p>
+                            </div>
+                          )}
+
+                          {/* Transcript toggle */}
+                          {meeting.granolaTranscript && (
+                            <div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowTranscript(showTranscript === meeting.id ? null : meeting.id);
+                                }}
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors underline"
+                              >
+                                {showTranscript === meeting.id ? "Hide transcript" : "View transcript"}
+                              </button>
+                              {showTranscript === meeting.id && (
+                                <div className="mt-2 text-sm whitespace-pre-wrap bg-muted/20 rounded-md p-3 max-h-96 overflow-y-auto border border-border">
+                                  {meeting.granolaTranscript}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex gap-2">
+                            <Link
+                              href={`/meetings/${meeting.id}`}
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              View full meeting &rarr;
+                            </Link>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <div className="flex-1">
-                  <h1 className="text-xl font-semibold">{contact.name}</h1>
-                  <p className="text-sm text-muted-foreground">{contact.role} at {contact.company}</p>
-                  <p className="text-sm text-muted-foreground mt-0.5">{contact.email}</p>
-                </div>
-                <Badge className={stageColors[stage]} variant="secondary">{stage}</Badge>
-              </div>
-              {contact.notes && (
-                <p className="text-sm text-muted-foreground mt-4 p-3 rounded-md bg-muted/50">{contact.notes}</p>
               )}
             </CardContent>
           </Card>
@@ -198,41 +309,80 @@ export function ContactDetail({
             </CardContent>
           </Card>
 
-          {/* Past Meetings */}
-          {contactMeetings.length > 0 && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-medium">Meetings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {contactMeetings.map((meeting) => (
-                  <Link key={meeting.id} href={`/meetings/${meeting.id}`} className="block">
-                    <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent transition-colors">
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{meeting.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(meeting.dateTime).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                          {" — "}{meeting.duration}min
-                        </p>
-                      </div>
-                      {meeting.granolaNote && (
-                        <Badge variant="secondary" className="text-xs">Has transcript</Badge>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+          {/* Notes Section */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-medium">Notes</CardTitle>
+                {!editingNotes && (
+                  <button
+                    onClick={() => setEditingNotes(true)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Edit
+                  </button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {editingNotes ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="w-full min-h-[120px] px-3 py-2 text-sm rounded-md border border-input bg-transparent resize-y"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveNotes}
+                      disabled={saving}
+                      className="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    >
+                      {saving ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      onClick={() => { setNotes(contact.notes); setEditingNotes(false); }}
+                      className="px-3 py-1.5 text-sm rounded-md border border-input hover:bg-accent transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                  {notes || "No notes yet. Click Edit to add notes."}
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Sidebar */}
+        {/* Right column (1/3 width) */}
         <div className="space-y-4">
+          {/* Contact Card */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <div className="h-12 w-12 rounded-full bg-accent flex items-center justify-center shrink-0">
+                  <span className="text-base font-semibold">
+                    {contact.name.split(" ").map((n) => n[0]).join("")}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-lg font-semibold truncate">{contact.name}</h1>
+                  <p className="text-sm text-muted-foreground truncate">{contact.role}</p>
+                  <p className="text-sm text-muted-foreground truncate">{contact.company}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{contact.email}</p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <Badge className={stageColors[stage]} variant="secondary">{stage}</Badge>
+                <Badge variant="outline" className="text-xs">{mode}</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Pipeline Stage Selector */}
           {contactStages.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
@@ -260,6 +410,7 @@ export function ContactDetail({
             </Card>
           )}
 
+          {/* Follow-up Date */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Follow-up Date</CardTitle>
@@ -278,6 +429,133 @@ export function ContactDetail({
             </CardContent>
           </Card>
 
+          {/* Company Profile */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Company Profile</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Company</p>
+                <p className="text-sm">{contact.company}</p>
+              </div>
+              {contact.companyIndustry && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Industry</p>
+                    <p className="text-sm">{contact.companyIndustry}</p>
+                  </div>
+                </>
+              )}
+              {contact.companySize && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Size</p>
+                    <p className="text-sm">{contact.companySize}</p>
+                  </div>
+                </>
+              )}
+              {contact.companyType && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Type</p>
+                    <p className="text-sm">{contact.companyType}</p>
+                  </div>
+                </>
+              )}
+              {contact.companyDescription && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Description</p>
+                    <p className="text-sm">{contact.companyDescription}</p>
+                  </div>
+                </>
+              )}
+              {contact.companyLocation && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Location</p>
+                    <p className="text-sm">{contact.companyLocation}</p>
+                  </div>
+                </>
+              )}
+              {contact.companyFunding && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Funding</p>
+                    <p className="text-sm">{contact.companyFunding}</p>
+                  </div>
+                </>
+              )}
+              {!contact.companyIndustry && !contact.companySize && !contact.companyType && !contact.companyDescription && !contact.companyLocation && !contact.companyFunding && (
+                <>
+                  <Separator />
+                  <p className="text-xs text-muted-foreground italic">No enrichment data yet</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Person Profile */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium">Person Profile</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Title</p>
+                <p className="text-sm">{contact.role} at {contact.company}</p>
+              </div>
+              {contact.personSummary && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Background</p>
+                    <p className="text-sm whitespace-pre-wrap">{contact.personSummary}</p>
+                  </div>
+                </>
+              )}
+              {contact.location && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Location</p>
+                    <p className="text-sm">{contact.location}</p>
+                  </div>
+                </>
+              )}
+              {contact.linkedinUrl && (
+                <>
+                  <Separator />
+                  <div>
+                    <p className="text-xs text-muted-foreground">LinkedIn</p>
+                    <a
+                      href={contact.linkedinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-400 hover:underline truncate block"
+                    >
+                      {contact.linkedinUrl}
+                    </a>
+                  </div>
+                </>
+              )}
+              {!contact.personSummary && !contact.location && !contact.linkedinUrl && (
+                <>
+                  <Separator />
+                  <p className="text-xs text-muted-foreground italic">No enrichment data yet</p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Source & Details */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium">Details</CardTitle>

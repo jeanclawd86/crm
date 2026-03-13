@@ -17,6 +17,15 @@ function rowToContact(row: Record<string, unknown>): Contact {
     notes: row.notes as string,
     avatarUrl: (row.avatar_url as string) || undefined,
     createdAt: String(row.created_at),
+    linkedinUrl: (row.linkedin_url as string) || undefined,
+    location: (row.location as string) || undefined,
+    personSummary: (row.person_summary as string) || undefined,
+    companyDescription: (row.company_description as string) || undefined,
+    companySize: (row.company_size as string) || undefined,
+    companyIndustry: (row.company_industry as string) || undefined,
+    companyType: (row.company_type as string) || undefined,
+    companyLocation: (row.company_location as string) || undefined,
+    companyFunding: (row.company_funding as string) || undefined,
   };
 }
 
@@ -31,6 +40,9 @@ function rowToMeeting(row: Record<string, unknown>): Meeting {
     granolaNote: (row.granola_note as string) || undefined,
     preMeetingBrief: (row.pre_meeting_brief as string) || undefined,
     userNotes: (row.user_notes as string) || undefined,
+    granolaId: (row.granola_id as string) || undefined,
+    granolaTranscript: (row.granola_transcript as string) || undefined,
+    granolaSummary: (row.granola_summary as string) || undefined,
   };
 }
 
@@ -170,14 +182,18 @@ export async function getPipelineCounts(mode?: ContactMode): Promise<Record<stri
 export async function createContact(data: Omit<Contact, "id" | "createdAt">): Promise<Contact> {
   const id = `c${Date.now()}`;
   const { rows } = await sql`
-    INSERT INTO contacts (id, name, email, company, role, stage, mode, next_follow_up, source, notes, avatar_url)
-    VALUES (${id}, ${data.name}, ${data.email}, ${data.company}, ${data.role}, ${data.stage}, ${data.mode}, ${data.nextFollowUp}, ${data.source}, ${data.notes}, ${data.avatarUrl ?? null})
+    INSERT INTO contacts (id, name, email, company, role, stage, mode, next_follow_up, source, notes, avatar_url,
+      linkedin_url, location, person_summary, company_description, company_size, company_industry, company_type, company_location, company_funding)
+    VALUES (${id}, ${data.name}, ${data.email}, ${data.company}, ${data.role}, ${data.stage}, ${data.mode}, ${data.nextFollowUp}, ${data.source}, ${data.notes}, ${data.avatarUrl ?? null},
+      ${data.linkedinUrl ?? null}, ${data.location ?? null}, ${data.personSummary ?? null}, ${data.companyDescription ?? null}, ${data.companySize ?? null}, ${data.companyIndustry ?? null}, ${data.companyType ?? null}, ${data.companyLocation ?? null}, ${data.companyFunding ?? null})
     RETURNING *
   `;
   return rowToContact(rows[0]);
 }
 
-export async function updateContact(id: string, data: Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes">>): Promise<Contact | undefined> {
+type ContactUpdateFields = Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes" | "linkedinUrl" | "location" | "personSummary" | "companyDescription" | "companySize" | "companyIndustry" | "companyType" | "companyLocation" | "companyFunding">>;
+
+export async function updateContact(id: string, data: ContactUpdateFields): Promise<Contact | undefined> {
   const current = await getContact(id);
   if (!current) return undefined;
   const name = data.name ?? current.name;
@@ -188,10 +204,22 @@ export async function updateContact(id: string, data: Partial<Pick<Contact, "nam
   const nextFollowUp = data.nextFollowUp !== undefined ? data.nextFollowUp : current.nextFollowUp;
   const source = data.source ?? current.source;
   const notes = data.notes ?? current.notes;
+  const linkedinUrl = data.linkedinUrl !== undefined ? data.linkedinUrl : (current.linkedinUrl ?? null);
+  const location = data.location !== undefined ? data.location : (current.location ?? null);
+  const personSummary = data.personSummary !== undefined ? data.personSummary : (current.personSummary ?? null);
+  const companyDescription = data.companyDescription !== undefined ? data.companyDescription : (current.companyDescription ?? null);
+  const companySize = data.companySize !== undefined ? data.companySize : (current.companySize ?? null);
+  const companyIndustry = data.companyIndustry !== undefined ? data.companyIndustry : (current.companyIndustry ?? null);
+  const companyType = data.companyType !== undefined ? data.companyType : (current.companyType ?? null);
+  const companyLocation = data.companyLocation !== undefined ? data.companyLocation : (current.companyLocation ?? null);
+  const companyFunding = data.companyFunding !== undefined ? data.companyFunding : (current.companyFunding ?? null);
   const { rows } = await sql`
     UPDATE contacts
     SET name = ${name}, email = ${email}, company = ${company}, role = ${role},
-        stage = ${stage}, next_follow_up = ${nextFollowUp}, source = ${source}, notes = ${notes}
+        stage = ${stage}, next_follow_up = ${nextFollowUp}, source = ${source}, notes = ${notes},
+        linkedin_url = ${linkedinUrl}, location = ${location}, person_summary = ${personSummary},
+        company_description = ${companyDescription}, company_size = ${companySize}, company_industry = ${companyIndustry},
+        company_type = ${companyType}, company_location = ${companyLocation}, company_funding = ${companyFunding}
     WHERE id = ${id}
     RETURNING *
   `;
@@ -201,14 +229,16 @@ export async function updateContact(id: string, data: Partial<Pick<Contact, "nam
 export async function createMeeting(data: Omit<Meeting, "id">): Promise<Meeting> {
   const id = `m${Date.now()}`;
   const { rows } = await sql`
-    INSERT INTO meetings (id, contact_id, title, date_time, duration, calendar_event_id, granola_note, pre_meeting_brief, user_notes)
-    VALUES (${id}, ${data.contactId}, ${data.title}, ${data.dateTime}, ${data.duration}, ${data.calendarEventId ?? null}, ${data.granolaNote ?? null}, ${data.preMeetingBrief ?? null}, ${data.userNotes ?? null})
+    INSERT INTO meetings (id, contact_id, title, date_time, duration, calendar_event_id, granola_note, pre_meeting_brief, user_notes, granola_id, granola_transcript, granola_summary)
+    VALUES (${id}, ${data.contactId}, ${data.title}, ${data.dateTime}, ${data.duration}, ${data.calendarEventId ?? null}, ${data.granolaNote ?? null}, ${data.preMeetingBrief ?? null}, ${data.userNotes ?? null}, ${data.granolaId ?? null}, ${data.granolaTranscript ?? null}, ${data.granolaSummary ?? null})
     RETURNING *
   `;
   return rowToMeeting(rows[0]);
 }
 
-export async function updateMeeting(id: string, data: Partial<Pick<Meeting, "title" | "dateTime" | "duration" | "granolaNote" | "preMeetingBrief" | "userNotes">>): Promise<Meeting | undefined> {
+type MeetingUpdateFields = Partial<Pick<Meeting, "title" | "dateTime" | "duration" | "granolaNote" | "preMeetingBrief" | "userNotes" | "granolaId" | "granolaTranscript" | "granolaSummary">>;
+
+export async function updateMeeting(id: string, data: MeetingUpdateFields): Promise<Meeting | undefined> {
   const current = await getMeeting(id);
   if (!current) return undefined;
   const title = data.title ?? current.title;
@@ -217,10 +247,14 @@ export async function updateMeeting(id: string, data: Partial<Pick<Meeting, "tit
   const granolaNote = data.granolaNote !== undefined ? data.granolaNote : (current.granolaNote ?? null);
   const preMeetingBrief = data.preMeetingBrief !== undefined ? data.preMeetingBrief : (current.preMeetingBrief ?? null);
   const userNotes = data.userNotes !== undefined ? data.userNotes : (current.userNotes ?? null);
+  const granolaId = data.granolaId !== undefined ? data.granolaId : (current.granolaId ?? null);
+  const granolaTranscript = data.granolaTranscript !== undefined ? data.granolaTranscript : (current.granolaTranscript ?? null);
+  const granolaSummary = data.granolaSummary !== undefined ? data.granolaSummary : (current.granolaSummary ?? null);
   const { rows } = await sql`
     UPDATE meetings
     SET title = ${title}, date_time = ${dateTime}, duration = ${duration},
-        granola_note = ${granolaNote}, pre_meeting_brief = ${preMeetingBrief}, user_notes = ${userNotes}
+        granola_note = ${granolaNote}, pre_meeting_brief = ${preMeetingBrief}, user_notes = ${userNotes},
+        granola_id = ${granolaId}, granola_transcript = ${granolaTranscript}, granola_summary = ${granolaSummary}
     WHERE id = ${id}
     RETURNING *
   `;

@@ -19,7 +19,7 @@ export const contacts: Contact[] = [
     email: "sarah@luminai.co",
     company: "LuminAI",
     role: "CEO & Co-founder",
-    stage: "Pilot",
+    stage: "Pilot Active",
     mode: "prospect",
     nextFollowUp: todayStr,
     source: "YC Demo Day",
@@ -136,7 +136,7 @@ export const contacts: Contact[] = [
     email: "ryan@codesmith.dev",
     company: "CodeSmith",
     role: "Co-founder & CTO",
-    stage: "Pilot",
+    stage: "Pilot Active",
     mode: "prospect",
     nextFollowUp: tomorrow,
     source: "YC batch mate",
@@ -275,7 +275,7 @@ export const activities: Activity[] = [
   // Sarah Chen (c1)
   { id: "a1", contactId: "c1", type: "stage_change", description: "Stage changed from Met → Follow-up", timestamp: `${twoWeeksAgo}T10:00:00`, metadata: { from: "Met", to: "Follow-up" } },
   { id: "a2", contactId: "c1", type: "meeting", description: "Initial demo call", timestamp: `${twoWeeksAgo}T14:00:00`, metadata: { meetingId: "past" } },
-  { id: "a3", contactId: "c1", type: "stage_change", description: "Stage changed from Follow-up → Pilot", timestamp: `${oneWeekAgo}T09:00:00`, metadata: { from: "Follow-up", to: "Pilot" } },
+  { id: "a3", contactId: "c1", type: "stage_change", description: "Stage changed from Follow-up → Pilot Active", timestamp: `${oneWeekAgo}T09:00:00`, metadata: { from: "Follow-up", to: "Pilot Active" } },
   { id: "a4", contactId: "c1", type: "note", description: "Sarah's team started using the product. 12 out of 15 engineers active in first 3 days.", timestamp: `${threeDaysAgo}T11:00:00` },
   { id: "a5", contactId: "c1", type: "follow_up_set", description: `Follow-up set for ${todayStr}`, timestamp: `${threeDaysAgo}T11:30:00` },
 
@@ -291,7 +291,7 @@ export const activities: Activity[] = [
   { id: "a12", contactId: "c3", type: "stage_change", description: "Stage changed from Lead → Met", timestamp: `${threeDaysAgo}T17:30:00`, metadata: { from: "Lead", to: "Met" } },
 
   // James Park (c4)
-  { id: "a13", contactId: "c4", type: "stage_change", description: "Stage changed from Pilot → Customer", timestamp: `${twoWeeksAgo}T10:00:00`, metadata: { from: "Pilot", to: "Customer" } },
+  { id: "a13", contactId: "c4", type: "stage_change", description: "Stage changed from Pilot Active → Customer", timestamp: `${twoWeeksAgo}T10:00:00`, metadata: { from: "Pilot Active", to: "Customer" } },
   { id: "a14", contactId: "c4", type: "note", description: "Annual contract signed. 40 seats. Very happy with pilot results.", timestamp: `${twoWeeksAgo}T10:30:00` },
   { id: "a15", contactId: "c4", type: "meeting", description: "Quarterly Business Review", timestamp: `${yesterday}T11:00:00`, metadata: { meetingId: "m4" } },
 
@@ -306,7 +306,7 @@ export const activities: Activity[] = [
   { id: "a21", contactId: "c6", type: "follow_up_set", description: `Follow-up set for ${yesterday}`, timestamp: `${threeDaysAgo}T10:30:00` },
 
   // Ryan Foster (c10)
-  { id: "a22", contactId: "c10", type: "stage_change", description: "Stage changed from Met → Pilot", timestamp: `${oneWeekAgo}T16:00:00`, metadata: { from: "Met", to: "Pilot" } },
+  { id: "a22", contactId: "c10", type: "stage_change", description: "Stage changed from Met → Pilot Active", timestamp: `${oneWeekAgo}T16:00:00`, metadata: { from: "Met", to: "Pilot Active" } },
   { id: "a23", contactId: "c10", type: "note", description: "Pilot kicked off. 8-person team onboarded.", timestamp: `${oneWeekAgo}T17:00:00` },
 
   // Michelle Tan - investor (c11)
