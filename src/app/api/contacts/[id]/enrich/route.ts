@@ -57,7 +57,6 @@ async function scrapeWebsite(url: string): Promise<string> {
     clearTimeout(timeout);
     if (!res.ok) return "";
     const html = await res.text();
-    // Strip scripts, styles, and HTML tags — extract text content
     const text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -72,8 +71,7 @@ async function scrapeWebsite(url: string): Promise<string> {
       .replace(/&#\d+;/g, "")
       .replace(/\s{2,}/g, " ")
       .trim();
-    // Limit to first 3000 chars (enough for homepage content)
-    return text.slice(0, 3000);
+    return text.slice(0, 4000);
   } catch {
     return "";
   }
@@ -81,9 +79,7 @@ async function scrapeWebsite(url: string): Promise<string> {
 
 // ─── Extract LinkedIn URL from search results ───
 function extractLinkedIn(results: BraveWebResult[]): string | undefined {
-  const linkedin = results.find((r) =>
-    r.url.match(/linkedin\.com\/in\//)
-  );
+  const linkedin = results.find((r) => r.url.match(/linkedin\.com\/in\//));
   return linkedin?.url;
 }
 
@@ -91,7 +87,6 @@ function extractLinkedIn(results: BraveWebResult[]): string | undefined {
 function findCompanyUrl(results: BraveWebResult[], companyName: string): string | undefined {
   if (!companyName || companyName === "Unknown") return undefined;
   const lower = companyName.toLowerCase().replace(/[^a-z0-9]/g, "");
-  // Look for a result URL that matches the company name
   for (const r of results) {
     try {
       const host = new URL(r.url).hostname.replace("www.", "").toLowerCase();
@@ -111,12 +106,12 @@ async function synthesizeWithAI(
   contactRole: string,
   searchResults: BraveWebResult[],
   websiteContent: string,
-  meetingCount: number,
+  meetingContext: string,
   mode: string,
 ): Promise<EnrichmentResult> {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   if (!anthropicKey) {
-    console.error("ANTHROPIC_API_KEY not configured — falling back to basic enrichment");
+    console.error("ANTHROPIC_API_KEY not configured");
     return {};
   }
 
@@ -127,58 +122,60 @@ async function synthesizeWithAI(
     .map((r) => `[${r.url}]\n${r.title}\n${r.description}`)
     .join("\n\n");
 
-  const prompt = `You are enriching a CRM contact for a B2B SaaS company (UserLabs — AI-powered qualitative research platform). Analyze the search results and website content to create a comprehensive profile.
+  const prompt = `You are enriching a CRM contact for UserLabs, a B2B SaaS company building an AI-powered qualitative research platform. Analyze all available data to create a comprehensive, structured profile.
 
 CONTACT: ${contactName}
 KNOWN ROLE: ${contactRole || "Unknown"}
 KNOWN COMPANY: ${contactCompany || "Unknown"}
-MODE: ${mode} (${mode === "investor" ? "this is a potential investor" : "this is a potential customer/prospect"})
-MEETINGS SO FAR: ${meetingCount}
+MODE: ${mode} (${mode === "investor" ? "potential investor" : "potential customer/prospect"})
 
 SEARCH RESULTS:
 ${searchContext}
 
 ${websiteContent ? `COMPANY WEBSITE CONTENT:\n${websiteContent}` : "No website content available."}
 
-Based on ALL available data, return a JSON object with these fields. Be concise but informative. If you can't determine something, use null. Do NOT make things up — only include what the data supports.
+${meetingContext ? `MEETING NOTES & TRANSCRIPTS:\n${meetingContext}` : "No meetings recorded yet."}
+
+Return a JSON object with these fields. Be factual — only include what the data supports.
 
 {
-  "personSummary": "2-3 sentence bio. Work history highlights, current role, notable experience. Focus on what would be useful to know before a sales meeting.",
-  "company": "Current company name (correct if the known company is wrong or Unknown)",
-  "role": "Current job title (correct if the known role is wrong or Unknown)", 
-  "companyDescription": "What the company does in 2-3 sentences, written from their perspective. What they sell, who they serve, what problem they solve. Use their own website language if available.",
-  "companySize": "Employee count range if known (e.g. '50-200', '1000+', 'Startup (<50)')",
-  "companyIndustry": "Primary industry (e.g. 'EdTech', 'FinTech', 'Healthcare', 'Real Estate')",
+  "personSummary": "A mini resume. Format as:\\n\\nCurrent role and company (1 sentence).\\n\\nWork history as bullet points — each bullet is: Company Name — Role (dates if known). 1-2 sentences on what that company does.\\n\\nExample:\\n'VP of Product at Acme Corp, a Series B enterprise analytics platform.\\n\\n• Google — Senior PM (2018-2021). Built and scaled Google's enterprise search product for Fortune 500 customers.\\n• Stripe — Product Lead (2015-2018). Led Stripe's billing infrastructure team, scaling to process $100B+ in annual transactions.\\n• McKinsey — Associate (2013-2015). Strategy consulting focused on technology and digital transformation for financial services clients.'\\n\\nOnly include roles you have evidence for. 2-5 roles max.",
+  
+  "company": "Current company name (correct if wrong or Unknown)",
+  "role": "Current job title (correct if wrong or Unknown)",
+  
+  "companyDescription": "A thorough description of the company. Format as:\\n\\n1st paragraph: What they do, who they serve, what problem they solve. Use their own language from their website if available.\\n\\n2nd paragraph: Market position, key differentiators, notable traction or customers if known.\\n\\nShould be 3-5 sentences total.",
+  
+  "companySize": "Employee count range (e.g. '50-200', '1000+', 'Startup (<50)')",
+  "companyIndustry": "Primary industry (e.g. 'EdTech', 'FinTech', 'Healthcare')",
   "companyType": "B2B, B2C, or B2B2C",
   "companyLocation": "Company HQ location",
-  "companyFunding": "Funding info if available (e.g. '$95M Series B', 'Bootstrapped', 'Pre-seed')",
+  "companyFunding": "Funding info if available (e.g. '$95M Series B', 'Bootstrapped')",
   "location": "Person's location if known",
-  "pilotOpportunities": "A single string with 2-3 bullet points separated by newlines. Each line starts with •. Based on what you know about their company: what potential opportunities exist for UserLabs (AI qualitative research tool)? How might they use AI-moderated user research? Who are their end users that they might want to research?",
-  "suggestedNextSteps": "A single string with 3 bullet points separated by newlines. Each line starts with •. Actionable next steps for the upcoming meeting. Consider: what to research, what to ask about, how to position UserLabs for their specific needs."
+  
+  "pilotOpportunities": "A single string with bullet points separated by newlines. Each line starts with • and must be LABELED as either [FROM MEETING] or [HYPOTHESIS].\\n\\n[FROM MEETING] = grounded in something actually discussed in meetings/calls. Reference the specific context.\\n[HYPOTHESIS] = educated guess based on company research, not yet validated in conversation.\\n\\nExample:\\n'• [FROM MEETING] They mentioned struggling with user onboarding research for their enterprise tier — UserLabs could run moderated sessions with their enterprise admins.\\n• [HYPOTHESIS] With 500K+ end users across K-12, they likely need ongoing UX research to improve educator and family experiences.\\n• [HYPOTHESIS] Their expansion into state agency workflows could benefit from UserLabs interviews with government procurement stakeholders.'\\n\\n2-4 bullets total.",
+  
+  "suggestedNextSteps": "A single string with 3 bullet points separated by newlines. Each starts with •. Actionable, specific next steps for the relationship. Consider what to research, ask about, or propose based on everything known."
 }
 
-IMPORTANT: pilotOpportunities and suggestedNextSteps must be plain strings with newlines between bullets, NOT arrays or JSON sets. Example: "• First point\\n• Second point\\n• Third point"
-
-Return ONLY valid JSON, no markdown code fences.`;
+IMPORTANT: All multi-line string fields use \\n for newlines. Return ONLY valid JSON, no markdown code fences.`;
 
   try {
     const response = await client.messages.create({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1000,
+      max_tokens: 1500,
       messages: [{ role: "user", content: prompt }],
     });
 
     const text = response.content[0].type === "text" ? response.content[0].text : "";
-    // Parse JSON — handle potential markdown fences
     const jsonStr = text.replace(/^```json?\n?/m, "").replace(/\n?```$/m, "").trim();
     const data = JSON.parse(jsonStr);
 
-    // Clean bullet-point fields — handle arrays, sets, or strings
+    // Clean bullet-point fields
     const cleanBullets = (val: unknown): string | undefined => {
       if (!val) return undefined;
       if (Array.isArray(val)) return val.join("\n");
       let s = String(val);
-      // Remove JSON set notation: {"• a","• b"} → • a\n• b
       if (s.startsWith("{") && s.endsWith("}")) {
         s = s.slice(1, -1).split(/","/).map(p => p.replace(/^"|"$/g, "")).join("\n");
       }
@@ -252,33 +249,49 @@ export async function POST(
       websiteContent = await scrapeWebsite(companyUrl);
     }
 
-    // Step 4: Get meeting count for context
+    // Step 4: Gather meeting context (summaries, notes, transcripts)
     const meetings = await getContactMeetings(id);
+    let meetingContext = "";
+    if (meetings.length > 0) {
+      meetingContext = meetings
+        .map((m) => {
+          const parts = [`Meeting: ${m.title} (${new Date(m.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})`];
+          if (m.granolaSummary) parts.push(`Summary: ${m.granolaSummary}`);
+          if (m.granolaNote) parts.push(`Notes: ${m.granolaNote.slice(0, 1500)}`);
+          if (m.granolaTranscript) parts.push(`Transcript excerpt: ${m.granolaTranscript.slice(0, 2000)}`);
+          if (m.userNotes) parts.push(`User notes: ${m.userNotes}`);
+          return parts.join("\n");
+        })
+        .join("\n\n---\n\n");
+      // Cap total meeting context at 8000 chars
+      if (meetingContext.length > 8000) {
+        meetingContext = meetingContext.slice(0, 8000) + "\n[...truncated]";
+      }
+    }
 
-    // Step 5: AI synthesis
+    // Step 5: AI synthesis with meeting context
     const enrichment = await synthesizeWithAI(
       contact.name,
       contact.company,
       contact.role,
       allResults,
       websiteContent,
-      meetings.length,
+      meetingContext,
       contact.mode || "prospect",
     );
 
     // Add LinkedIn URL
     if (linkedinUrl) enrichment.linkedinUrl = linkedinUrl;
 
-    // Only update fields that are new or better (don't overwrite good data with empty)
+    // Smart update — don't overwrite good data with empty
     const updateData: Record<string, string | undefined> = {};
     for (const [key, value] of Object.entries(enrichment)) {
       if (value && value !== "null" && value !== "Unknown") {
         const currentValue = (contact as unknown as Record<string, unknown>)[key];
-        // Always update if current is empty, Unknown, or we have better data
         if (!currentValue || currentValue === "Unknown" || currentValue === "") {
           updateData[key] = value;
-        } else if (key === "suggestedNextSteps" || key === "pilotOpportunities") {
-          // Always refresh these
+        } else if (key === "suggestedNextSteps" || key === "pilotOpportunities" || key === "personSummary" || key === "companyDescription") {
+          // Always refresh these key fields
           updateData[key] = value;
         }
       }
