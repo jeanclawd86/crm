@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -15,62 +15,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
   DropdownMenuSeparator,
-  DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { stageColors } from "@/lib/stage-colors";
+import { FollowUpDropdown, FollowUpMenuItems } from "@/components/follow-up-dropdown";
 import { Contact, ContactMode, PipelineStage, getStagesForMode, getModeLabel } from "@/lib/types";
 
 type ArchiveFilter = "active" | "archived" | "all";
-
-function FollowUpCell({
-  contactId,
-  value,
-  onSet,
-}: {
-  contactId: string;
-  value: string;
-  onSet: (id: string, date: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  function formatDate(dateStr: string) {
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-
-  if (editing) {
-    return (
-      <td className="px-4 py-3">
-        <input
-          ref={inputRef}
-          type="date"
-          autoFocus
-          defaultValue={value}
-          onChange={(e) => {
-            if (e.target.value) {
-              onSet(contactId, e.target.value);
-              setEditing(false);
-            }
-          }}
-          onBlur={() => setEditing(false)}
-          className="text-sm px-2 py-1 rounded-md border border-input bg-background w-[130px]"
-        />
-      </td>
-    );
-  }
-
-  return (
-    <td className="px-4 py-3">
-      <button
-        onClick={() => setEditing(true)}
-        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        {value ? formatDate(value) : "None"}
-      </button>
-    </td>
-  );
-}
 
 export function ContactsTable({
   contacts,
@@ -283,14 +233,9 @@ export function ContactsTable({
                 <option key={s} value={s}>{s}</option>
               ))}
             </select>
-            <input
-              type="date"
-              disabled={bulkAction}
-              className="text-sm px-2 py-1 rounded-md border border-input bg-background"
-              onChange={(e) => {
-                if (e.target.value) bulkSetFollowUp(e.target.value);
-              }}
-              title="Set Follow-up"
+            <FollowUpDropdown
+              triggerLabel="Set Follow-up..."
+              onSelect={(date) => { if (date) bulkSetFollowUp(date); }}
             />
             <button
               disabled={bulkAction}
@@ -407,11 +352,12 @@ export function ContactsTable({
                       {contact.stage}
                     </Badge>
                   </td>
-                  <FollowUpCell
-                    contactId={contact.id}
-                    value={contact.nextFollowUp || ""}
-                    onSet={quickSetFollowUp}
-                  />
+                  <td className="px-4 py-3">
+                    <FollowUpDropdown
+                      value={contact.nextFollowUp || undefined}
+                      onSelect={(date) => quickSetFollowUp(contact.id, date)}
+                    />
+                  </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{contact.source}</td>
                   <td className="px-4 py-3">
                     <DropdownMenu>
@@ -439,16 +385,10 @@ export function ContactsTable({
                         <DropdownMenuSub>
                           <DropdownMenuSubTrigger>Set Follow-up</DropdownMenuSubTrigger>
                           <DropdownMenuSubContent>
-                            <div className="p-2">
-                              <input
-                                type="date"
-                                defaultValue={contact.nextFollowUp || ""}
-                                onChange={(e) => {
-                                  if (e.target.value) quickSetFollowUp(contact.id, e.target.value);
-                                }}
-                                className="text-sm px-2 py-1 rounded-md border border-input bg-background w-full"
-                              />
-                            </div>
+                            <FollowUpMenuItems
+                              value={contact.nextFollowUp || undefined}
+                              onSelect={(date) => quickSetFollowUp(contact.id, date)}
+                            />
                           </DropdownMenuSubContent>
                         </DropdownMenuSub>
                         <DropdownMenuSeparator />

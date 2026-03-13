@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { InlineEdit } from "@/components/ui/inline-edit";
 import { stageColors, stageDotColors } from "@/lib/stage-colors";
+import { FollowUpDropdown } from "@/components/follow-up-dropdown";
 import { PipelineStage, Activity, Contact, Meeting, Email, getStagesForMode } from "@/lib/types";
 
 function ActivityIcon({ type }: { type: Activity["type"] }) {
@@ -678,12 +679,9 @@ export function ContactDetail({
               <CardTitle className="text-sm font-medium">Follow-up Date</CardTitle>
             </CardHeader>
             <CardContent>
-              <input
-                type="date"
-                value={followUp}
-                onChange={(e) => handleFollowUpChange(e.target.value)}
-                disabled={saving}
-                className="w-full px-3 py-1.5 text-sm rounded-md border border-input bg-transparent"
+              <FollowUpDropdown
+                value={followUp || undefined}
+                onSelect={(date) => handleFollowUpChange(date)}
               />
               {saving && (
                 <p className="text-xs text-muted-foreground mt-1">Saving...</p>
