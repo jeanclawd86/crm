@@ -307,7 +307,7 @@ export function ContactDetail({
               <CardTitle className="text-base font-medium">Account Intelligence</CardTitle>
             </CardHeader>
             <CardContent>
-              {!localContact.accountStatus && !localContact.keyProblems && !localContact.pilotOpportunities && !localContact.meetingInsights ? (
+              {!localContact.accountStatus && !localContact.keyProblems && !localContact.pilotOpportunities && !localContact.meetingInsights && !localContact.suggestedNextSteps ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">No data yet — run transcript analysis to populate</p>
               ) : null}
               <div className="space-y-4">
@@ -341,6 +341,15 @@ export function ContactDetail({
                     <InlineEdit value={localContact.meetingInsights || ""} onSave={(v) => patchField("meetingInsights", v)} className="text-sm" placeholder="Cumulative insights from meetings" multiline />
                   </div>
                 </div>
+                {localContact.suggestedNextSteps && (
+                  <>
+                    <Separator />
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Suggested Next Steps</p>
+                      <div className="text-sm whitespace-pre-line">{localContact.suggestedNextSteps}</div>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>

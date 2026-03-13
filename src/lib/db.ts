@@ -31,6 +31,7 @@ function rowToContact(row: Record<string, unknown>): Contact {
     keyProblems: (row.key_problems as string) || undefined,
     pilotOpportunities: (row.pilot_opportunities as string) || undefined,
     meetingInsights: (row.meeting_insights as string) || undefined,
+    suggestedNextSteps: (row.suggested_next_steps as string) || undefined,
   };
 }
 
@@ -299,7 +300,7 @@ export async function createContact(data: Omit<Contact, "id" | "createdAt">): Pr
   return rowToContact(rows[0]);
 }
 
-type ContactUpdateFields = Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes" | "archived" | "linkedinUrl" | "location" | "personSummary" | "companyDescription" | "companySize" | "companyIndustry" | "companyType" | "companyLocation" | "companyFunding" | "accountStatus" | "keyProblems" | "pilotOpportunities" | "meetingInsights">>;
+type ContactUpdateFields = Partial<Pick<Contact, "name" | "email" | "company" | "role" | "stage" | "nextFollowUp" | "source" | "notes" | "archived" | "linkedinUrl" | "location" | "personSummary" | "companyDescription" | "companySize" | "companyIndustry" | "companyType" | "companyLocation" | "companyFunding" | "accountStatus" | "keyProblems" | "pilotOpportunities" | "meetingInsights" | "suggestedNextSteps">>;
 
 export async function updateContact(id: string, data: ContactUpdateFields): Promise<Contact | undefined> {
   const current = await getContact(id);
@@ -326,6 +327,7 @@ export async function updateContact(id: string, data: ContactUpdateFields): Prom
   const keyProblems = data.keyProblems !== undefined ? data.keyProblems : (current.keyProblems ?? null);
   const pilotOpportunities = data.pilotOpportunities !== undefined ? data.pilotOpportunities : (current.pilotOpportunities ?? null);
   const meetingInsights = data.meetingInsights !== undefined ? data.meetingInsights : (current.meetingInsights ?? null);
+  const suggestedNextSteps = data.suggestedNextSteps !== undefined ? data.suggestedNextSteps : (current.suggestedNextSteps ?? null);
   const { rows } = await sql`
     UPDATE contacts
     SET name = ${name}, email = ${email}, company = ${company}, role = ${role},
@@ -334,7 +336,8 @@ export async function updateContact(id: string, data: ContactUpdateFields): Prom
         company_description = ${companyDescription}, company_size = ${companySize}, company_industry = ${companyIndustry},
         company_type = ${companyType}, company_location = ${companyLocation}, company_funding = ${companyFunding},
         account_status = ${accountStatus}, key_problems = ${keyProblems},
-        pilot_opportunities = ${pilotOpportunities}, meeting_insights = ${meetingInsights}
+        pilot_opportunities = ${pilotOpportunities}, meeting_insights = ${meetingInsights},
+        suggested_next_steps = ${suggestedNextSteps}
     WHERE id = ${id}
     RETURNING *
   `;

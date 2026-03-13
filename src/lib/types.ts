@@ -59,6 +59,7 @@ export interface Contact {
   keyProblems?: string;
   pilotOpportunities?: string;
   meetingInsights?: string;
+  suggestedNextSteps?: string;
 }
 
 export interface Meeting {

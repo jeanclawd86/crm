@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getContact, updateContact } from "@/lib/db";
+import { getContact, updateContact, getContactMeetings } from "@/lib/db";
 import { checkAuth } from "@/lib/auth";
+import { PipelineStage } from "@/lib/types";
 
 interface BraveWebResult {
   title: string;
@@ -117,6 +118,115 @@ function extractLocation(text: string): string | undefined {
   return undefined;
 }
 
+function generateNextSteps(
+  stage: PipelineStage,
+  mode: string,
+  meetingCount: number,
+  contact: { name: string; company: string; nextFollowUp?: string | null; companyIndustry?: string | null }
+): string {
+  const firstName = contact.name.split(" ")[0];
+  const steps: string[] = [];
+
+  if (mode === "investor") {
+    switch (stage) {
+      case "Researching":
+        steps.push(`Research ${contact.company} investment thesis and recent portfolio`);
+        steps.push("Find warm intro path via LinkedIn connections");
+        steps.push("Prepare 1-paragraph cold email draft");
+        break;
+      case "Warm Intro":
+        steps.push(`Follow up with ${firstName} if no response in 3-5 days`);
+        steps.push("Share deck or one-pager if requested");
+        steps.push("Research their recent investments for talking points");
+        break;
+      case "Met":
+        steps.push(`Send follow-up email to ${firstName} with deck/materials`);
+        steps.push(`Research ${contact.company}'s portfolio for overlap/synergy`);
+        steps.push("Prepare answers for likely due diligence questions");
+        break;
+      case "Pitched":
+        steps.push("Send follow-up materials from pitch");
+        steps.push("Address any open questions from the meeting");
+        steps.push("Schedule follow-up call within 1 week");
+        break;
+      case "Due Diligence":
+        steps.push("Prepare data room access if not already shared");
+        steps.push("Schedule follow-up call to address DD questions");
+        steps.push("Line up customer references if requested");
+        break;
+      case "Term Sheet":
+        steps.push("Review terms with legal counsel");
+        steps.push("Negotiate key terms (valuation, board seats, pro-rata)");
+        steps.push("Begin closing checklist");
+        break;
+      case "Committed":
+        steps.push("Finalize legal docs and wire instructions");
+        steps.push("Add to investor update distribution list");
+        steps.push("Send welcome package and onboarding info");
+        break;
+      default:
+        steps.push(`Follow up with ${firstName}`);
+        steps.push("Update stage based on latest interaction");
+    }
+  } else {
+    // prospect mode
+    switch (stage) {
+      case "Lead":
+        steps.push(`Research ${contact.company} and their ${contact.companyIndustry || "industry"} challenges`);
+        steps.push(`Send intro email to ${firstName} with relevant use case`);
+        steps.push("Identify decision-maker if not already confirmed");
+        break;
+      case "Intro":
+        steps.push(meetingCount === 0
+          ? `Schedule intro call with ${firstName}`
+          : `Send follow-up from last conversation with ${firstName}`);
+        steps.push("Share relevant case study or demo link");
+        steps.push("Qualify: confirm budget, timeline, and decision process");
+        break;
+      case "Met":
+        steps.push(`Send follow-up to ${firstName} from last meeting`);
+        steps.push("Share relevant case study or demo materials");
+        steps.push("Identify next steps and stakeholders involved");
+        break;
+      case "Follow-up":
+        steps.push(`Follow up with ${firstName} — re-engage the conversation`);
+        steps.push("Share new content or updates relevant to their needs");
+        steps.push("Propose a concrete next step (demo, pilot, call)");
+        break;
+      case "Demo Scheduled":
+        steps.push(`Prepare tailored demo for ${contact.company}`);
+        steps.push("Identify specific pain points to address in demo");
+        steps.push("Send calendar invite with agenda and prep materials");
+        break;
+      case "Pilot Agreed":
+        steps.push("Define pilot scope, timeline, and success criteria");
+        steps.push(`Send pilot agreement to ${firstName} for sign-off`);
+        steps.push("Set up pilot environment and onboarding");
+        break;
+      case "Pilot Active":
+        steps.push(`Check in with ${firstName} on pilot progress (weekly)`);
+        steps.push("Document wins and usage metrics for conversion pitch");
+        steps.push("Prepare conversion proposal based on pilot outcomes");
+        break;
+      case "Customer":
+        steps.push("Complete onboarding and account setup");
+        steps.push(`Schedule kickoff call with ${firstName}'s team`);
+        steps.push("Set 30/60/90 day check-in cadence");
+        break;
+      default:
+        steps.push(`Follow up with ${firstName}`);
+        steps.push("Update stage based on latest interaction");
+    }
+  }
+
+  const doneStages = ["Customer", "Committed", "Pass", "Passed", "Churned"];
+  if (!contact.nextFollowUp && !doneStages.includes(stage)) {
+    steps.push("⚠️ Set a follow-up date");
+  }
+
+  return steps.map(s => `• ${s}`).join("\n");
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -167,7 +277,12 @@ export async function POST(
 
     const clean = (v: string | undefined) => v ? cleanText(v) || undefined : undefined;
 
+    // Generate suggested next steps based on stage and context
+    const meetings = await getContactMeetings(id);
+    const suggestedNextSteps = generateNextSteps(contact.stage as PipelineStage, contact.mode || "prospect", meetings.length, contact);
+
     const enrichment = {
+      suggestedNextSteps,
       linkedinUrl: contact.linkedinUrl || extractLinkedIn(allResults),
       location: contact.location || clean(extractLocation(allText)),
       personSummary: contact.personSummary || clean(personSummary),
