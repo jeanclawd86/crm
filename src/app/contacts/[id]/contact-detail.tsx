@@ -2,14 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { stageColors, stageDotColors } from "@/lib/stage-colors";
-import { PipelineStage, Activity, Contact, Meeting } from "@/lib/types";
-
-const allStages: PipelineStage[] = ["Lead", "Met", "Follow-up", "Pilot", "Customer", "Pass"];
+import { PipelineStage, Activity, Contact, Meeting, getStagesForMode } from "@/lib/types";
 
 function ActivityIcon({ type }: { type: Activity["type"] }) {
   const cls = "h-4 w-4";
@@ -57,6 +55,11 @@ export function ContactDetail({
   contactMeetings: Meeting[];
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mode = contact.mode;
+  const modeParam = searchParams.get("mode") || mode;
+  const contactStages = getStagesForMode(mode);
+
   const [stage, setStage] = useState<PipelineStage>(contact.stage);
   const [followUp, setFollowUp] = useState(contact.nextFollowUp ?? "");
   const [activities, setActivities] = useState(initialActivities);
@@ -72,7 +75,6 @@ export function ContactDetail({
         body: JSON.stringify({ nextFollowUp: newDate || null }),
       });
       if (res.ok) {
-        // Add activity entry for the follow-up change
         const actRes = await fetch("/api/activities", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -129,7 +131,7 @@ export function ContactDetail({
 
   return (
     <div className="p-8 max-w-5xl">
-      <Link href="/contacts" className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 inline-block">
+      <Link href={`/contacts?mode=${modeParam}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 inline-block">
         &larr; Contacts
       </Link>
 
@@ -231,30 +233,32 @@ export function ContactDetail({
 
         {/* Sidebar */}
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium">Pipeline Stage</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-1">
-                {allStages.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleStageChange(s)}
-                    disabled={saving}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
-                      stage === s
-                        ? "bg-accent text-foreground font-medium"
-                        : "text-muted-foreground hover:bg-accent/50"
-                    }`}
-                  >
-                    <div className={`h-2 w-2 rounded-full ${stageDotColors[s]}`} />
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          {contactStages.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Pipeline Stage</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1">
+                  {contactStages.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => handleStageChange(s)}
+                      disabled={saving}
+                      className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-md text-sm transition-colors ${
+                        stage === s
+                          ? "bg-accent text-foreground font-medium"
+                          : "text-muted-foreground hover:bg-accent/50"
+                      }`}
+                    >
+                      <div className={`h-2 w-2 rounded-full ${stageDotColors[s]}`} />
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-3">

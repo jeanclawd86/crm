@@ -13,6 +13,7 @@ export async function POST() {
         company TEXT NOT NULL,
         role TEXT NOT NULL,
         stage TEXT NOT NULL DEFAULT 'Lead',
+        mode TEXT NOT NULL DEFAULT 'prospect',
         next_follow_up DATE,
         source TEXT NOT NULL DEFAULT '',
         notes TEXT NOT NULL DEFAULT '',
@@ -48,7 +49,11 @@ export async function POST() {
     await sql`CREATE INDEX IF NOT EXISTS idx_meetings_contact_id ON meetings(contact_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_activities_contact_id ON activities(contact_id)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_contacts_stage ON contacts(stage)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_contacts_mode ON contacts(mode)`;
     await sql`CREATE INDEX IF NOT EXISTS idx_contacts_next_follow_up ON contacts(next_follow_up)`;
+
+    // Add mode column if it doesn't exist (for existing tables)
+    await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'prospect'`;
 
     // Clear existing data (order matters for foreign keys)
     await sql`DELETE FROM activities`;
@@ -58,8 +63,8 @@ export async function POST() {
     // Seed contacts
     for (const c of contacts) {
       await sql`
-        INSERT INTO contacts (id, name, email, company, role, stage, next_follow_up, source, notes, avatar_url, created_at)
-        VALUES (${c.id}, ${c.name}, ${c.email}, ${c.company}, ${c.role}, ${c.stage}, ${c.nextFollowUp}, ${c.source}, ${c.notes}, ${c.avatarUrl ?? null}, ${c.createdAt})
+        INSERT INTO contacts (id, name, email, company, role, stage, mode, next_follow_up, source, notes, avatar_url, created_at)
+        VALUES (${c.id}, ${c.name}, ${c.email}, ${c.company}, ${c.role}, ${c.stage}, ${c.mode}, ${c.nextFollowUp}, ${c.source}, ${c.notes}, ${c.avatarUrl ?? null}, ${c.createdAt})
       `;
     }
 

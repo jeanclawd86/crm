@@ -6,13 +6,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { stageColors } from "@/lib/stage-colors";
-import { Contact, PipelineStage } from "@/lib/types";
+import { Contact, ContactMode, PipelineStage, getStagesForMode, getModeLabel } from "@/lib/types";
 
-const stages: (PipelineStage | "All")[] = ["All", "Lead", "Met", "Follow-up", "Pilot", "Customer", "Pass"];
-
-export function ContactsTable({ contacts }: { contacts: Contact[] }) {
+export function ContactsTable({ contacts, mode }: { contacts: Contact[]; mode: ContactMode }) {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<PipelineStage | "All">("All");
+
+  const stages: (PipelineStage | "All")[] = ["All", ...getStagesForMode(mode)];
+  const companyLabel = mode === "investor" ? "Fund" : "Company";
 
   const filtered = useMemo(() => {
     return contacts.filter((c) => {
@@ -28,7 +29,7 @@ export function ContactsTable({ contacts }: { contacts: Contact[] }) {
   return (
     <div className="p-8 max-w-5xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Contacts</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{getModeLabel(mode)}</h1>
         <p className="text-sm text-muted-foreground mt-1">{contacts.length} contacts in pipeline</p>
       </div>
 
@@ -36,12 +37,12 @@ export function ContactsTable({ contacts }: { contacts: Contact[] }) {
         <CardHeader className="pb-3">
           <div className="flex items-center gap-3">
             <Input
-              placeholder="Search by name or company..."
+              placeholder={`Search by name or ${companyLabel.toLowerCase()}...`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs h-9 text-sm"
             />
-            <div className="flex gap-1 ml-auto">
+            <div className="flex gap-1 ml-auto flex-wrap">
               {stages.map((stage) => (
                 <button
                   key={stage}
@@ -63,7 +64,7 @@ export function ContactsTable({ contacts }: { contacts: Contact[] }) {
             <thead>
               <tr className="border-t border-border">
                 <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Name</th>
-                <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Company</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">{companyLabel}</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Stage</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Follow-up</th>
                 <th className="text-left text-xs font-medium text-muted-foreground px-6 py-3">Source</th>
@@ -73,7 +74,7 @@ export function ContactsTable({ contacts }: { contacts: Contact[] }) {
               {filtered.map((contact) => (
                 <tr key={contact.id} className="border-t border-border hover:bg-accent/50 transition-colors">
                   <td className="px-6 py-3">
-                    <Link href={`/contacts/${contact.id}`} className="flex items-center gap-3">
+                    <Link href={`/contacts/${contact.id}?mode=${mode}`} className="flex items-center gap-3">
                       <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center shrink-0">
                         <span className="text-xs font-medium">
                           {contact.name.split(" ").map((n) => n[0]).join("")}

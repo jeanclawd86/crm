@@ -1,5 +1,5 @@
 import { sql } from "@vercel/postgres";
-import { Contact, Meeting, Activity, PipelineStage } from "./types";
+import { Contact, Meeting, Activity, PipelineStage, ContactMode } from "./types";
 
 // --- Row mappers ---
 
@@ -11,6 +11,7 @@ function rowToContact(row: Record<string, unknown>): Contact {
     company: row.company as string,
     role: row.role as string,
     stage: row.stage as PipelineStage,
+    mode: (row.mode as ContactMode) || "prospect",
     nextFollowUp: row.next_follow_up ? String(row.next_follow_up).split("T")[0] : null,
     source: row.source as string,
     notes: row.notes as string,
@@ -46,7 +47,11 @@ function rowToActivity(row: Record<string, unknown>): Activity {
 
 // --- Query helpers ---
 
-export async function getAllContacts(): Promise<Contact[]> {
+export async function getAllContacts(mode?: ContactMode): Promise<Contact[]> {
+  if (mode) {
+    const { rows } = await sql`SELECT * FROM contacts WHERE mode = ${mode} ORDER BY created_at DESC`;
+    return rows.map(rowToContact);
+  }
   const { rows } = await sql`SELECT * FROM contacts ORDER BY created_at DESC`;
   return rows.map(rowToContact);
 }
@@ -79,17 +84,29 @@ export async function getContactMeetings(contactId: string): Promise<Meeting[]> 
   return rows.map(rowToMeeting);
 }
 
-export async function getTodaysMeetings(): Promise<(Meeting & { contact: Contact })[]> {
-  const { rows } = await sql`
-    SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
-           c.role AS c_role, c.stage AS c_stage, c.next_follow_up AS c_next_follow_up,
-           c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
-           c.created_at AS c_created_at
-    FROM meetings m
-    JOIN contacts c ON c.id = m.contact_id
-    WHERE DATE(m.date_time) = CURRENT_DATE
-    ORDER BY m.date_time ASC
-  `;
+export async function getTodaysMeetings(mode?: ContactMode): Promise<(Meeting & { contact: Contact })[]> {
+  const query = mode
+    ? sql`
+      SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+             c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+             c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+             c.created_at AS c_created_at
+      FROM meetings m
+      JOIN contacts c ON c.id = m.contact_id
+      WHERE DATE(m.date_time) = CURRENT_DATE AND c.mode = ${mode}
+      ORDER BY m.date_time ASC
+    `
+    : sql`
+      SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+             c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+             c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+             c.created_at AS c_created_at
+      FROM meetings m
+      JOIN contacts c ON c.id = m.contact_id
+      WHERE DATE(m.date_time) = CURRENT_DATE
+      ORDER BY m.date_time ASC
+    `;
+  const { rows } = await query;
   return rows.map((row) => ({
     ...rowToMeeting(row),
     contact: rowToContact({
@@ -99,6 +116,7 @@ export async function getTodaysMeetings(): Promise<(Meeting & { contact: Contact
       company: row.c_company,
       role: row.c_role,
       stage: row.c_stage,
+      mode: row.c_mode,
       next_follow_up: row.c_next_follow_up,
       source: row.c_source,
       notes: row.c_notes,
@@ -108,27 +126,39 @@ export async function getTodaysMeetings(): Promise<(Meeting & { contact: Contact
   }));
 }
 
-export async function getDueFollowUps(): Promise<Contact[]> {
+export async function getDueFollowUps(mode?: ContactMode): Promise<Contact[]> {
+  if (mode) {
+    const { rows } = await sql`
+      SELECT * FROM contacts
+      WHERE next_follow_up IS NOT NULL
+        AND next_follow_up <= CURRENT_DATE
+        AND stage NOT IN ('Pass', 'Passed', 'Churned')
+        AND mode = ${mode}
+      ORDER BY next_follow_up ASC
+    `;
+    return rows.map(rowToContact);
+  }
   const { rows } = await sql`
     SELECT * FROM contacts
     WHERE next_follow_up IS NOT NULL
       AND next_follow_up <= CURRENT_DATE
-      AND stage != 'Pass'
+      AND stage NOT IN ('Pass', 'Passed', 'Churned')
     ORDER BY next_follow_up ASC
   `;
   return rows.map(rowToContact);
 }
 
-export async function getPipelineCounts(): Promise<Record<string, number>> {
-  const counts: Record<string, number> = {
-    Lead: 0,
-    Met: 0,
-    "Follow-up": 0,
-    Pilot: 0,
-    Customer: 0,
-    Pass: 0,
-  };
+export async function getPipelineCounts(mode?: ContactMode): Promise<Record<string, number>> {
+  if (mode) {
+    const { rows } = await sql`SELECT stage, COUNT(*)::int AS count FROM contacts WHERE mode = ${mode} GROUP BY stage`;
+    const counts: Record<string, number> = {};
+    for (const row of rows) {
+      counts[row.stage as string] = row.count as number;
+    }
+    return counts;
+  }
   const { rows } = await sql`SELECT stage, COUNT(*)::int AS count FROM contacts GROUP BY stage`;
+  const counts: Record<string, number> = {};
   for (const row of rows) {
     counts[row.stage as string] = row.count as number;
   }
@@ -140,8 +170,8 @@ export async function getPipelineCounts(): Promise<Record<string, number>> {
 export async function createContact(data: Omit<Contact, "id" | "createdAt">): Promise<Contact> {
   const id = `c${Date.now()}`;
   const { rows } = await sql`
-    INSERT INTO contacts (id, name, email, company, role, stage, next_follow_up, source, notes, avatar_url)
-    VALUES (${id}, ${data.name}, ${data.email}, ${data.company}, ${data.role}, ${data.stage}, ${data.nextFollowUp}, ${data.source}, ${data.notes}, ${data.avatarUrl ?? null})
+    INSERT INTO contacts (id, name, email, company, role, stage, mode, next_follow_up, source, notes, avatar_url)
+    VALUES (${id}, ${data.name}, ${data.email}, ${data.company}, ${data.role}, ${data.stage}, ${data.mode}, ${data.nextFollowUp}, ${data.source}, ${data.notes}, ${data.avatarUrl ?? null})
     RETURNING *
   `;
   return rowToContact(rows[0]);

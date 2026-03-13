@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   company TEXT NOT NULL,
   role TEXT NOT NULL,
   stage TEXT NOT NULL DEFAULT 'Lead',
+  mode TEXT NOT NULL DEFAULT 'prospect',
   next_follow_up DATE,
   source TEXT NOT NULL DEFAULT '',
   notes TEXT NOT NULL DEFAULT '',
@@ -36,4 +37,5 @@ CREATE TABLE IF NOT EXISTS activities (
 CREATE INDEX IF NOT EXISTS idx_meetings_contact_id ON meetings(contact_id);
 CREATE INDEX IF NOT EXISTS idx_activities_contact_id ON activities(contact_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_stage ON contacts(stage);
+CREATE INDEX IF NOT EXISTS idx_contacts_mode ON contacts(mode);
 CREATE INDEX IF NOT EXISTS idx_contacts_next_follow_up ON contacts(next_follow_up);

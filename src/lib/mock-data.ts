@@ -12,6 +12,7 @@ const tomorrow = new Date(today.getTime() + 86400000).toISOString().split("T")[0
 const nextWeek = new Date(today.getTime() + 7 * 86400000).toISOString().split("T")[0];
 
 export const contacts: Contact[] = [
+  // Prospects
   {
     id: "c1",
     name: "Sarah Chen",
@@ -19,6 +20,7 @@ export const contacts: Contact[] = [
     company: "LuminAI",
     role: "CEO & Co-founder",
     stage: "Pilot",
+    mode: "prospect",
     nextFollowUp: todayStr,
     source: "YC Demo Day",
     notes: "Running a 2-week pilot. Very engaged, asked about enterprise pricing. Team of 15 engineers.",
@@ -31,6 +33,7 @@ export const contacts: Contact[] = [
     company: "StackFlow",
     role: "VP Engineering",
     stage: "Follow-up",
+    mode: "prospect",
     nextFollowUp: todayStr,
     source: "LinkedIn outreach",
     notes: "Interested in developer productivity angle. Wants to see API docs before committing.",
@@ -43,6 +46,7 @@ export const contacts: Contact[] = [
     company: "DataWeave",
     role: "Head of Product",
     stage: "Met",
+    mode: "prospect",
     nextFollowUp: tomorrow,
     source: "Warm intro from Alex K.",
     notes: "Met at the AI conference. Strong interest but budget cycle is Q2.",
@@ -55,6 +59,7 @@ export const contacts: Contact[] = [
     company: "Velocity Labs",
     role: "CTO",
     stage: "Customer",
+    mode: "prospect",
     nextFollowUp: nextWeek,
     source: "Inbound — website",
     notes: "Signed annual contract. Using for their entire eng team (40 seats). Very happy.",
@@ -67,6 +72,7 @@ export const contacts: Contact[] = [
     company: "NexGen AI",
     role: "Founder",
     stage: "Lead",
+    mode: "prospect",
     nextFollowUp: tomorrow,
     source: "Conference — AI Summit",
     notes: "Early-stage startup. Interesting use case in healthcare. Worth exploring.",
@@ -79,6 +85,7 @@ export const contacts: Contact[] = [
     company: "CloudPeak",
     role: "Engineering Manager",
     stage: "Follow-up",
+    mode: "prospect",
     nextFollowUp: yesterday,
     source: "Referral from James Park",
     notes: "Evaluating multiple solutions. Price-sensitive. Needs SSO.",
@@ -91,6 +98,7 @@ export const contacts: Contact[] = [
     company: "Synthetica",
     role: "Director of Engineering",
     stage: "Pass",
+    mode: "prospect",
     nextFollowUp: null,
     source: "Cold outreach",
     notes: "Not a fit right now — they just signed a 2-year deal with competitor. Revisit in 18 months.",
@@ -103,6 +111,7 @@ export const contacts: Contact[] = [
     company: "PulseTech",
     role: "CEO",
     stage: "Lead",
+    mode: "prospect",
     nextFollowUp: nextWeek,
     source: "Twitter DM",
     notes: "Saw our launch tweet. Wants a demo. B2B SaaS in fintech space.",
@@ -115,6 +124,7 @@ export const contacts: Contact[] = [
     company: "BrightPath",
     role: "VP Product",
     stage: "Met",
+    mode: "prospect",
     nextFollowUp: todayStr,
     source: "Warm intro from investor",
     notes: "Great first meeting. Aligned on vision. Wants to bring in their CTO for technical deep-dive.",
@@ -127,10 +137,77 @@ export const contacts: Contact[] = [
     company: "CodeSmith",
     role: "Co-founder & CTO",
     stage: "Pilot",
+    mode: "prospect",
     nextFollowUp: tomorrow,
     source: "YC batch mate",
     notes: "Started pilot last week. 8-person team. Good early signals on adoption.",
     createdAt: oneWeekAgo,
+  },
+  // Investors
+  {
+    id: "c11",
+    name: "Michelle Tan",
+    email: "michelle@sequoiacap.com",
+    company: "Sequoia Capital",
+    role: "Partner",
+    stage: "Pitched",
+    mode: "investor",
+    nextFollowUp: todayStr,
+    source: "YC intro",
+    notes: "Pitched at partner meeting. Strong interest. Wants to see Q2 metrics before moving to DD.",
+    createdAt: oneWeekAgo,
+  },
+  {
+    id: "c12",
+    name: "Alex Rivera",
+    email: "alex@a16z.com",
+    company: "Andreessen Horowitz",
+    role: "General Partner",
+    stage: "Warm Intro",
+    mode: "investor",
+    nextFollowUp: tomorrow,
+    source: "Existing investor intro",
+    notes: "Got warm intro through our seed investor. Meeting scheduled for next week.",
+    createdAt: threeDaysAgo,
+  },
+  {
+    id: "c13",
+    name: "Daniel Park",
+    email: "daniel@indexventures.com",
+    company: "Index Ventures",
+    role: "Principal",
+    stage: "Due Diligence",
+    mode: "investor",
+    nextFollowUp: todayStr,
+    source: "Conference",
+    notes: "Deep in DD. Requested customer references and financial model. Very thorough process.",
+    createdAt: twoWeeksAgo,
+  },
+  {
+    id: "c14",
+    name: "Sarah Lin",
+    email: "sarah@lightspeed.com",
+    company: "Lightspeed Venture Partners",
+    role: "Partner",
+    stage: "Researching",
+    mode: "investor",
+    nextFollowUp: nextWeek,
+    source: "Cold outreach",
+    notes: "Early research phase. Need to understand their thesis on developer tools.",
+    createdAt: yesterday,
+  },
+  {
+    id: "c15",
+    name: "Omar Hassan",
+    email: "omar@firstround.com",
+    company: "First Round Capital",
+    role: "Partner",
+    stage: "Passed",
+    mode: "investor",
+    nextFollowUp: null,
+    source: "YC Demo Day",
+    notes: "Passed — didn't align with their current fund thesis. Good relationship though, keep warm.",
+    createdAt: twoWeeksAgo,
   },
 ];
 
@@ -182,6 +259,16 @@ export const meetings: Meeting[] = [
     preMeetingBrief: "First demo with StackFlow. Marcus is VP Eng — decision maker.",
     userNotes: "Good demo. Engineers were engaged. Marcus is cautious but interested. Key blocker is migration effort.",
   },
+  // Investor meetings
+  {
+    id: "m6",
+    contactId: "c11",
+    title: "Partner Meeting — Sequoia",
+    dateTime: `${todayStr}T11:30:00`,
+    duration: 60,
+    preMeetingBrief: `**Michelle Tan — Sequoia Capital**\n\n**Fund:** $8B fund, focused on enterprise SaaS and developer tools.\n\n**Relationship:** Pitched at partner meeting last week. Strong interest.\n\n**Key topics to cover:**\n- Q2 growth metrics and projections\n- Customer expansion stories\n- Use of funds / hiring plan\n\n**Notes:** Michelle is our champion at the firm. Need to give her ammo for the Monday partner meeting.`,
+    userNotes: "",
+  },
 ];
 
 export const activities: Activity[] = [
@@ -221,6 +308,16 @@ export const activities: Activity[] = [
   // Ryan Foster (c10)
   { id: "a22", contactId: "c10", type: "stage_change", description: "Stage changed from Met → Pilot", timestamp: `${oneWeekAgo}T16:00:00`, metadata: { from: "Met", to: "Pilot" } },
   { id: "a23", contactId: "c10", type: "note", description: "Pilot kicked off. 8-person team onboarded.", timestamp: `${oneWeekAgo}T17:00:00` },
+
+  // Michelle Tan - investor (c11)
+  { id: "a24", contactId: "c11", type: "stage_change", description: "Stage changed from Warm Intro → Pitched", timestamp: `${oneWeekAgo}T10:00:00`, metadata: { from: "Warm Intro", to: "Pitched" } },
+  { id: "a25", contactId: "c11", type: "meeting", description: "Partner meeting pitch at Sequoia", timestamp: `${oneWeekAgo}T14:00:00`, metadata: { meetingId: "m6" } },
+  { id: "a26", contactId: "c11", type: "follow_up_set", description: `Follow-up set for ${todayStr}`, timestamp: `${oneWeekAgo}T15:00:00` },
+
+  // Daniel Park - investor (c13)
+  { id: "a27", contactId: "c13", type: "stage_change", description: "Stage changed from Pitched → Due Diligence", timestamp: `${oneWeekAgo}T09:00:00`, metadata: { from: "Pitched", to: "Due Diligence" } },
+  { id: "a28", contactId: "c13", type: "email", description: "Sent financial model and customer reference list", timestamp: `${threeDaysAgo}T10:00:00` },
+  { id: "a29", contactId: "c13", type: "follow_up_set", description: `Follow-up set for ${todayStr}`, timestamp: `${threeDaysAgo}T10:30:00` },
 ];
 
 // Helper functions
@@ -253,19 +350,14 @@ export function getTodaysMeetings(): (Meeting & { contact: Contact })[] {
 
 export function getDueFollowUps(): Contact[] {
   return contacts
-    .filter((c) => c.nextFollowUp && c.nextFollowUp <= todayStr && c.stage !== "Pass")
+    .filter((c) => c.nextFollowUp && c.nextFollowUp <= todayStr && c.stage !== "Pass" && c.stage !== "Passed" && c.stage !== "Churned")
     .sort((a, b) => (a.nextFollowUp! > b.nextFollowUp! ? 1 : -1));
 }
 
 export function getPipelineCounts(): Record<string, number> {
-  const counts: Record<string, number> = {
-    Lead: 0,
-    Met: 0,
-    "Follow-up": 0,
-    Pilot: 0,
-    Customer: 0,
-    Pass: 0,
-  };
-  contacts.forEach((c) => counts[c.stage]++);
+  const counts: Record<string, number> = {};
+  contacts.forEach((c) => {
+    counts[c.stage] = (counts[c.stage] || 0) + 1;
+  });
   return counts;
 }
