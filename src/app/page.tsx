@@ -88,7 +88,7 @@ export default async function DashboardPage({
                 {todaysMeetings.map((meeting) => (
                   <Link
                     key={meeting.id}
-                    href={`/meetings/${meeting.id}`}
+                    href={`/contacts/${meeting.contactId}?prep=${meeting.id}&mode=${mode}`}
                     className="block"
                   >
                     <div className="flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-accent transition-colors">

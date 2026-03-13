@@ -80,3 +80,19 @@ export interface Activity {
   timestamp: string; // ISO date string
   metadata?: Record<string, string>;
 }
+
+export interface Email {
+  id: string;
+  contactId: string;
+  subject: string;
+  fromAddress: string;
+  toAddress: string;
+  bodyPreview: string;
+  body?: string;
+  timestamp: string;
+  threadId?: string;
+}
+
+export interface MeetingWithContact extends Meeting {
+  contact: Contact;
+}

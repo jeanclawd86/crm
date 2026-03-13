@@ -23,7 +23,24 @@ export async function POST() {
     await sql`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS mode TEXT NOT NULL DEFAULT 'prospect'`;
     await sql`CREATE INDEX IF NOT EXISTS idx_contacts_mode ON contacts(mode)`;
 
-    return NextResponse.json({ success: true, message: "Migration complete: all enrichment and transcript columns added" });
+    // Emails table
+    await sql`
+      CREATE TABLE IF NOT EXISTS emails (
+        id TEXT PRIMARY KEY,
+        contact_id TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+        subject TEXT NOT NULL,
+        from_address TEXT NOT NULL,
+        to_address TEXT NOT NULL,
+        body_preview TEXT NOT NULL DEFAULT '',
+        body TEXT,
+        timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        thread_id TEXT
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS idx_emails_contact_id ON emails(contact_id)`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_emails_thread_id ON emails(thread_id)`;
+
+    return NextResponse.json({ success: true, message: "Migration complete: all enrichment, transcript, and email columns added" });
   } catch (error) {
     console.error("Migration error:", error);
     return NextResponse.json(

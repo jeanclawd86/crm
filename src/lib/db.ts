@@ -1,5 +1,5 @@
 import { sql } from "@vercel/postgres";
-import { Contact, Meeting, Activity, PipelineStage, ContactMode } from "./types";
+import { Contact, Meeting, Activity, PipelineStage, ContactMode, Email, MeetingWithContact } from "./types";
 
 // --- Row mappers ---
 
@@ -43,6 +43,20 @@ function rowToMeeting(row: Record<string, unknown>): Meeting {
     granolaId: (row.granola_id as string) || undefined,
     granolaTranscript: (row.granola_transcript as string) || undefined,
     granolaSummary: (row.granola_summary as string) || undefined,
+  };
+}
+
+function rowToEmail(row: Record<string, unknown>): Email {
+  return {
+    id: row.id as string,
+    contactId: row.contact_id as string,
+    subject: row.subject as string,
+    fromAddress: row.from_address as string,
+    toAddress: row.to_address as string,
+    bodyPreview: row.body_preview as string,
+    body: (row.body as string) || undefined,
+    timestamp: String(row.timestamp),
+    threadId: (row.thread_id as string) || undefined,
   };
 }
 
@@ -270,4 +284,108 @@ export async function createActivity(data: Omit<Activity, "id">): Promise<Activi
     RETURNING *
   `;
   return rowToActivity(rows[0]);
+}
+
+// --- All meetings with contact info ---
+
+export async function getAllMeetings(): Promise<MeetingWithContact[]> {
+  const { rows } = await sql`
+    SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+           c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+           c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+           c.created_at AS c_created_at
+    FROM meetings m
+    JOIN contacts c ON c.id = m.contact_id
+    ORDER BY m.date_time DESC
+  `;
+  return rows.map((row) => ({
+    ...rowToMeeting(row),
+    contact: rowToContact({
+      id: row.contact_id,
+      name: row.c_name,
+      email: row.c_email,
+      company: row.c_company,
+      role: row.c_role,
+      stage: row.c_stage,
+      mode: row.c_mode,
+      next_follow_up: row.c_next_follow_up,
+      source: row.c_source,
+      notes: row.c_notes,
+      avatar_url: row.c_avatar_url,
+      created_at: row.c_created_at,
+    }),
+  }));
+}
+
+// --- Email queries ---
+
+export async function getContactEmails(contactId: string): Promise<Email[]> {
+  const { rows } = await sql`
+    SELECT * FROM emails
+    WHERE contact_id = ${contactId}
+    ORDER BY timestamp DESC
+  `;
+  return rows.map(rowToEmail);
+}
+
+export async function createEmail(data: Omit<Email, "id">): Promise<Email> {
+  const id = `e${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  const { rows } = await sql`
+    INSERT INTO emails (id, contact_id, subject, from_address, to_address, body_preview, body, timestamp, thread_id)
+    VALUES (${id}, ${data.contactId}, ${data.subject}, ${data.fromAddress}, ${data.toAddress}, ${data.bodyPreview}, ${data.body ?? null}, ${data.timestamp}, ${data.threadId ?? null})
+    RETURNING *
+  `;
+  return rowToEmail(rows[0]);
+}
+
+// --- Search ---
+
+export async function searchContacts(query: string): Promise<Contact[]> {
+  const pattern = `%${query}%`;
+  const { rows } = await sql`
+    SELECT * FROM contacts
+    WHERE name ILIKE ${pattern}
+       OR company ILIKE ${pattern}
+       OR email ILIKE ${pattern}
+       OR notes ILIKE ${pattern}
+    ORDER BY created_at DESC
+    LIMIT 50
+  `;
+  return rows.map(rowToContact);
+}
+
+export async function searchMeetings(query: string): Promise<MeetingWithContact[]> {
+  const pattern = `%${query}%`;
+  const { rows } = await sql`
+    SELECT m.*, c.name AS c_name, c.email AS c_email, c.company AS c_company,
+           c.role AS c_role, c.stage AS c_stage, c.mode AS c_mode, c.next_follow_up AS c_next_follow_up,
+           c.source AS c_source, c.notes AS c_notes, c.avatar_url AS c_avatar_url,
+           c.created_at AS c_created_at
+    FROM meetings m
+    JOIN contacts c ON c.id = m.contact_id
+    WHERE m.title ILIKE ${pattern}
+       OR m.granola_summary ILIKE ${pattern}
+       OR m.granola_transcript ILIKE ${pattern}
+       OR m.user_notes ILIKE ${pattern}
+       OR m.granola_note ILIKE ${pattern}
+    ORDER BY m.date_time DESC
+    LIMIT 50
+  `;
+  return rows.map((row) => ({
+    ...rowToMeeting(row),
+    contact: rowToContact({
+      id: row.contact_id,
+      name: row.c_name,
+      email: row.c_email,
+      company: row.c_company,
+      role: row.c_role,
+      stage: row.c_stage,
+      mode: row.c_mode,
+      next_follow_up: row.c_next_follow_up,
+      source: row.c_source,
+      notes: row.c_notes,
+      avatar_url: row.c_avatar_url,
+      created_at: row.c_created_at,
+    }),
+  }));
 }

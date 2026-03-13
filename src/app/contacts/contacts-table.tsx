@@ -27,6 +27,7 @@ export function ContactsTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkAction, setBulkAction] = useState(false);
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Partial<Contact>>>(new Map());
+  const [enrichProgress, setEnrichProgress] = useState<{ current: number; total: number } | null>(null);
 
   const stages: (PipelineStage | "All")[] = ["All", ...getStagesForMode(mode)];
   const companyLabel = mode === "investor" ? "Fund" : "Company";
@@ -135,6 +136,21 @@ export function ContactsTable({
     }
   }
 
+  async function bulkEnrich() {
+    const ids = Array.from(selected);
+    setEnrichProgress({ current: 0, total: ids.length });
+    try {
+      for (let i = 0; i < ids.length; i++) {
+        setEnrichProgress({ current: i + 1, total: ids.length });
+        await fetch(`/api/contacts/${ids[i]}/enrich`, { method: "POST" });
+      }
+      setSelected(new Set());
+      router.refresh();
+    } finally {
+      setEnrichProgress(null);
+    }
+  }
+
   async function quickPass(contactId: string) {
     const passStage = mode === "investor" ? "Passed" : "Pass";
     applyOptimistic(contactId, { stage: passStage as PipelineStage });
@@ -189,6 +205,15 @@ export function ContactsTable({
               className="text-sm px-3 py-1 rounded-md border border-input bg-background hover:bg-destructive hover:text-destructive-foreground transition-colors"
             >
               Pass All
+            </button>
+            <button
+              disabled={bulkAction || enrichProgress !== null}
+              onClick={bulkEnrich}
+              className="text-sm px-3 py-1 rounded-md border border-input bg-background hover:bg-primary hover:text-primary-foreground transition-colors"
+            >
+              {enrichProgress
+                ? `Enriching ${enrichProgress.current}/${enrichProgress.total}...`
+                : "Bulk Enrich"}
             </button>
           </div>
           <button

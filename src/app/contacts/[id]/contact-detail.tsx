@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { stageColors, stageDotColors } from "@/lib/stage-colors";
-import { PipelineStage, Activity, Contact, Meeting, getStagesForMode } from "@/lib/types";
+import { PipelineStage, Activity, Contact, Meeting, Email, getStagesForMode } from "@/lib/types";
 
 function ActivityIcon({ type }: { type: Activity["type"] }) {
   const cls = "h-4 w-4";
@@ -49,10 +49,14 @@ export function ContactDetail({
   contact,
   activities: initialActivities,
   contactMeetings,
+  emails: initialEmails,
+  prepMeeting,
 }: {
   contact: Contact;
   activities: Activity[];
   contactMeetings: Meeting[];
+  emails: Email[];
+  prepMeeting?: Meeting;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -68,6 +72,9 @@ export function ContactDetail({
   const [editingNotes, setEditingNotes] = useState(false);
   const [expandedMeeting, setExpandedMeeting] = useState<string | null>(null);
   const [showTranscript, setShowTranscript] = useState<string | null>(null);
+  const [enriching, setEnriching] = useState(false);
+  const [expandedEmail, setExpandedEmail] = useState<string | null>(null);
+  const [emails] = useState(initialEmails);
 
   async function handleFollowUpChange(newDate: string) {
     setFollowUp(newDate);
@@ -117,7 +124,7 @@ export function ContactDetail({
           body: JSON.stringify({
             contactId: contact.id,
             type: "stage_change",
-            description: `Stage changed from ${oldStage} → ${newStage}`,
+            description: `Stage changed from ${oldStage} \u2192 ${newStage}`,
             timestamp: new Date().toISOString(),
             metadata: { from: oldStage, to: newStage },
           }),
@@ -148,6 +155,20 @@ export function ContactDetail({
     }
   }
 
+  async function handleEnrich() {
+    setEnriching(true);
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}/enrich`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        router.refresh();
+      }
+    } finally {
+      setEnriching(false);
+    }
+  }
+
   function getMeetingSummaryPreview(meeting: Meeting): string {
     const text = meeting.granolaSummary || meeting.granolaNote || "";
     if (!text) return "No summary available";
@@ -155,11 +176,91 @@ export function ContactDetail({
     return lines.slice(0, 2).join(" ").slice(0, 150) + (text.length > 150 ? "..." : "");
   }
 
+  // Group emails by threadId
+  const emailThreads = emails.reduce<Record<string, Email[]>>((acc, email) => {
+    const key = email.threadId || email.id;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(email);
+    return acc;
+  }, {});
+
   return (
     <div className="p-8 max-w-6xl">
       <Link href={`/contacts?mode=${modeParam}`} className="text-sm text-muted-foreground hover:text-foreground transition-colors mb-4 inline-block">
         &larr; Contacts
       </Link>
+
+      {/* Meeting Prep Banner */}
+      {prepMeeting && (
+        <Card className="mb-6 border-blue-500/30 bg-blue-950/20">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+              </svg>
+              <CardTitle className="text-base font-medium text-blue-300">Meeting Prep</CardTitle>
+              <Badge variant="secondary" className="text-[10px] bg-blue-900/50 text-blue-300">Upcoming</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div>
+                <h3 className="text-lg font-semibold">{prepMeeting.title}</h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {new Date(prepMeeting.dateTime).toLocaleDateString("en-US", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                  {" \u2014 "}{prepMeeting.duration}min
+                </p>
+              </div>
+              {prepMeeting.preMeetingBrief && (
+                <div>
+                  <p className="text-xs font-medium text-blue-400 mb-1">Pre-meeting Brief</p>
+                  <p className="text-sm whitespace-pre-wrap">{prepMeeting.preMeetingBrief}</p>
+                </div>
+              )}
+              {/* Quick context from enrichment */}
+              {(contact.personSummary || contact.companyDescription) && (
+                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-blue-500/20">
+                  {contact.personSummary && (
+                    <div>
+                      <p className="text-xs font-medium text-blue-400 mb-1">About {contact.name.split(" ")[0]}</p>
+                      <p className="text-xs text-muted-foreground">{contact.personSummary}</p>
+                    </div>
+                  )}
+                  {contact.companyDescription && (
+                    <div>
+                      <p className="text-xs font-medium text-blue-400 mb-1">About {contact.company}</p>
+                      <p className="text-xs text-muted-foreground">{contact.companyDescription}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* Previous meetings summary */}
+              {contactMeetings.length > 1 && (
+                <div className="pt-2 border-t border-blue-500/20">
+                  <p className="text-xs font-medium text-blue-400 mb-1">Previous Meetings ({contactMeetings.length - 1})</p>
+                  <div className="space-y-1">
+                    {contactMeetings
+                      .filter((m) => m.id !== prepMeeting.id)
+                      .slice(0, 3)
+                      .map((m) => (
+                        <p key={m.id} className="text-xs text-muted-foreground">
+                          {new Date(m.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {" \u2014 "}{m.title}
+                        </p>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-3 gap-6">
         {/* Left column (2/3 width) */}
@@ -196,7 +297,7 @@ export function ContactDetail({
                                 hour: "numeric",
                                 minute: "2-digit",
                               })}
-                              {" — "}{meeting.duration}min
+                              {" \u2014 "}{meeting.duration}min
                             </p>
                           </div>
                           <svg
@@ -216,7 +317,6 @@ export function ContactDetail({
                       {expandedMeeting === meeting.id && (
                         <div className="px-3 pb-3 space-y-3">
                           <Separator />
-                          {/* AI Summary */}
                           {(meeting.granolaSummary || meeting.granolaNote) && (
                             <div>
                               <p className="text-xs font-medium text-muted-foreground mb-1">AI Summary</p>
@@ -225,16 +325,12 @@ export function ContactDetail({
                               </div>
                             </div>
                           )}
-
-                          {/* User Notes */}
                           {meeting.userNotes && (
                             <div>
                               <p className="text-xs font-medium text-muted-foreground mb-1">Notes</p>
                               <p className="text-sm">{meeting.userNotes}</p>
                             </div>
                           )}
-
-                          {/* Transcript toggle */}
                           {meeting.granolaTranscript && (
                             <div>
                               <button
@@ -253,7 +349,6 @@ export function ContactDetail({
                               )}
                             </div>
                           )}
-
                           <div className="flex gap-2">
                             <Link
                               href={`/meetings/${meeting.id}`}
@@ -264,6 +359,75 @@ export function ContactDetail({
                           </div>
                         </div>
                       )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Email Threads */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-medium">Emails</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {emails.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-4 text-center">No emails yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(emailThreads).map(([threadKey, threadEmails]) => (
+                    <div key={threadKey} className="rounded-lg border border-border">
+                      {threadEmails.map((email, i) => (
+                        <div key={email.id} className={i > 0 ? "border-t border-border" : ""}>
+                          <button
+                            onClick={() => setExpandedEmail(expandedEmail === email.id ? null : email.id)}
+                            className="w-full text-left p-3 hover:bg-accent/50 transition-colors"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">{email.subject}</p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-xs text-muted-foreground truncate">
+                                    {email.fromAddress}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {new Date(email.timestamp).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      hour: "numeric",
+                                      minute: "2-digit",
+                                    })}
+                                  </span>
+                                </div>
+                              </div>
+                              <svg
+                                className={`h-4 w-4 text-muted-foreground transition-transform shrink-0 ${expandedEmail === email.id ? "rotate-180" : ""}`}
+                                fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                              </svg>
+                            </div>
+                            {expandedEmail !== email.id && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                {email.bodyPreview}
+                              </p>
+                            )}
+                          </button>
+                          {expandedEmail === email.id && (
+                            <div className="px-3 pb-3 space-y-2">
+                              <Separator />
+                              <div className="text-xs text-muted-foreground space-y-0.5">
+                                <p>From: {email.fromAddress}</p>
+                                <p>To: {email.toAddress}</p>
+                              </div>
+                              <div className="text-sm whitespace-pre-wrap bg-muted/20 rounded-md p-3">
+                                {email.body || email.bodyPreview}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -426,6 +590,34 @@ export function ContactDetail({
               {saving && (
                 <p className="text-xs text-muted-foreground mt-1">Saving...</p>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Enrich Button */}
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <button
+                onClick={handleEnrich}
+                disabled={enriching}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {enriching ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Enriching...
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+                    </svg>
+                    Enrich with Brave Search
+                  </>
+                )}
+              </button>
             </CardContent>
           </Card>
 
