@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { LocalTime } from "@/components/local-time";
 import {
   getUpcomingMeetings,
   getRecentMeetings,
@@ -100,15 +101,7 @@ export default async function DashboardPage({
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs text-muted-foreground">
-                            {new Date(meeting.dateTime).toLocaleDateString(
-                              "en-US",
-                              { month: "short", day: "numeric" }
-                            )}
-                            {" · "}
-                            {new Date(meeting.dateTime).toLocaleTimeString(
-                              "en-US",
-                              { hour: "numeric", minute: "2-digit" }
-                            )}
+                            <LocalTime dateTime={meeting.dateTime} />
                             {" · "}
                             {meeting.duration}min
                           </span>
@@ -199,7 +192,7 @@ export default async function DashboardPage({
                 className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent/50 transition-colors"
               >
                 <span className="text-xs text-muted-foreground w-16 shrink-0">
-                  {new Date(meeting.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  <LocalTime dateTime={meeting.dateTime} format="dateOnly" />
                 </span>
                 <span className="text-sm text-muted-foreground truncate">{meeting.title}</span>
                 <span className="text-xs text-muted-foreground/60 shrink-0 ml-auto">{meeting.contact.name}</span>

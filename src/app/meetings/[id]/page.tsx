@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { LocalTime } from "@/components/local-time";
 import { getMeeting, getContact, getContactMeetings } from "@/lib/db";
 import { stageDotColors } from "@/lib/stage-colors";
 
@@ -42,13 +43,13 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                       </svg>
-                      {meetingDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                      <LocalTime dateTime={meeting.dateTime} format="dateOnly" />
                     </span>
                     <span className="flex items-center gap-1.5">
                       <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      {meetingDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} — {meeting.duration}min
+                      <LocalTime dateTime={meeting.dateTime} format="timeOnly" /> — {meeting.duration}min
                     </span>
                   </div>
                 </div>
@@ -211,7 +212,7 @@ export default async function MeetingDetailPage({ params }: { params: Promise<{ 
                     <div className="p-2 rounded-md hover:bg-accent transition-colors">
                       <p className="text-sm">{m.title}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(m.dateTime).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        <LocalTime dateTime={m.dateTime} format="dateOnly" />
                       </p>
                     </div>
                   </Link>
