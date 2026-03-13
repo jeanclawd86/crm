@@ -14,6 +14,37 @@ interface BraveSearchResponse {
   };
 }
 
+/** Strip HTML tags, decode entities, and remove LinkedIn/scraper boilerplate */
+function cleanText(raw: string): string {
+  let text = raw
+    // Decode common HTML entities
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#\d+;/g, "")
+    // Strip HTML tags
+    .replace(/<[^>]+>/g, "")
+    // Remove LinkedIn boilerplate
+    .replace(/\d+ billion members \|[^.]+\./gi, "")
+    .replace(/Manage your professional identity\.[^.]*\./gi, "")
+    .replace(/Build and engage with your professional network\.[^.]*\./gi, "")
+    .replace(/Access knowledge, insights and opportunities\./gi, "")
+    .replace(/View [^']+?'s email address:[^.]*\./gi, "")
+    .replace(/\w+ contact details:[^.]*\./gi, "")
+    .replace(/Email address:\s*\S+/gi, "")
+    .replace(/Phone number:\s*\S+/gi, "")
+    .replace(/\+1-[\d*-]+/g, "")
+    // Collapse whitespace
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  // Remove leading pipes/separators
+  text = text.replace(/^\s*\|\s*/, "").trim();
+  return text;
+}
+
 function extractLinkedIn(results: BraveWebResult[]): string | undefined {
   const linkedIn = results.find(
     (r) => r.url.includes("linkedin.com/in/") || r.url.includes("linkedin.com/company/")
@@ -134,15 +165,17 @@ export async function POST(
       ? personBioResults.slice(0, 2).map((r) => r.description).join(" ").slice(0, 500)
       : extractFromResults(personResults, [contact.name.split(" ")[0]]);
 
+    const clean = (v: string | undefined) => v ? cleanText(v) || undefined : undefined;
+
     const enrichment = {
       linkedinUrl: contact.linkedinUrl || extractLinkedIn(allResults),
-      location: contact.location || extractLocation(allText),
-      personSummary: contact.personSummary || personSummary,
-      companyDescription: contact.companyDescription || extractFromResults(companyResults, [contact.company]),
+      location: contact.location || clean(extractLocation(allText)),
+      personSummary: contact.personSummary || clean(personSummary),
+      companyDescription: contact.companyDescription || clean(extractFromResults(companyResults, [contact.company])),
       companySize: contact.companySize || inferCompanySize(allText),
       companyIndustry: contact.companyIndustry || inferIndustry(allText),
       companyType: contact.companyType || inferCompanyType(allText),
-      companyLocation: contact.companyLocation || extractLocation(companyResults.map((r) => r.description).join(" ")),
+      companyLocation: contact.companyLocation || clean(extractLocation(companyResults.map((r) => r.description).join(" "))),
       companyFunding: contact.companyFunding || extractFunding(allText),
     };
 
